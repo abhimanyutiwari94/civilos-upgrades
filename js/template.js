@@ -307,6 +307,11 @@
   const PHOTO_TAGS = ['Wide view', 'Close-up', 'Front wall', 'Back wall', 'Left wall', 'Right wall',
     'Ceiling', 'Floor', 'Door', 'Window', 'Electrical', 'Furniture', 'Damage', 'Leak / damp', 'Crack', 'Reference'];
 
+  /* Boxes that belong to ONE school only. Everything else is copied to the next new school. */
+  self.CU_PER_SCHOOL = ['sd_name', 'sd_udise', 'sd_date', 'sd_village', 'sd_pin', 'sd_gps', 'sd_address', 'sd_hm', 'sd_hmmobile',
+    'sd_boys', 'sd_girls', 'sd_totstu', 'sd_teachers', 'sd_buildings', 'sd_floors', 'sd_year', 'sd_rooms', 'sd_bua', 'sd_plot', 'sd_vehicle',
+    'cl_records', 'cl_plan', 'cl_notes', 'cv_priority', 'cv_entry', 'cv_remarks', 'cv_overall', 'cv_status'];
+
   self.CU_DEFAULT_TEMPLATE = function () {
     return JSON.parse(JSON.stringify({
       v: 1,

@@ -1,10 +1,10 @@
 /* CivilOS Upgrades — offline engine. After the first open, the app works with no internet. */
-const VERSION = 'cu-1.0.0-202610130114';
+const VERSION = 'cu-1.1.0-202610130153';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/logo.svg',
   'js/sha256.js', 'js/codes.js', 'js/template.js', 'js/util.js', 'js/db.js', 'js/store.js', 'js/lock.js',
-  'js/camera.js', 'js/zip.js', 'js/report.js', 'js/pdf.js', 'js/docx.js', 'js/xlsx.js', 'js/backup.js',
+  'js/camera.js', 'js/zip.js', 'js/report.js', 'js/pdf.js', 'js/docx.js', 'js/xlsx.js', 'js/backup.js', 'js/export-rooms.js',
   'js/ui-common.js', 'js/ui-school.js', 'js/ui-admin.js', 'js/app.js',
 ];
 self.addEventListener('install', (e) => {

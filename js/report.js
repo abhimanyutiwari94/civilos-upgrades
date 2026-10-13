@@ -242,6 +242,7 @@
     docx: { mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ext: '.docx', desc: 'Word document' },
     xlsx: { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ext: '.xlsx', desc: 'Excel workbook' },
     backup: { mime: 'application/octet-stream', ext: '.cupg', desc: 'CivilOS Upgrades backup' },
+    zip: { mime: 'application/zip', ext: '.zip', desc: 'ZIP folder' },
   };
   U.FILETYPES = TYPES;
   U.canPickFolder = () => typeof self.showSaveFilePicker === 'function';

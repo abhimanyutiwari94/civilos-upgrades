@@ -74,15 +74,23 @@
 
     async function newSchool() {
       const nm = h('input.inp', { placeholder: 'e.g. Primary School, village name' });
-      const last = S.schools[0];
-      const copy = h('input', { type: 'checkbox', checked: true });
+      const others = S.schools.slice();
+      const sel = others.length ? h('select.inp', others.map((x, i) => h('option', { value: x.id, selected: i === 0 }, U.schoolName(x) + (x.data.sd_date ? '  (' + U.fmtDate(x.data.sd_date) + ')' : '')))) : null;
+      const cb = (on) => h('input', { type: 'checkbox', checked: on });
+      const cDetails = cb(true), cRooms = cb(false), cAnswers = cb(false);
       U.modal({
         title: 'New school',
         body: [h('div.field', h('label', 'School name'), nm),
-          last ? h('label.switch', h('span', 'Copy block, district, state and engineer from the last school'), copy) : null,
-          h('p.small.muted', 'You can fill or change everything later. Nothing is compulsory.')],
+          others.length ? [
+            h('div.field', h('label', 'Fill from previous school'), sel),
+            h('label.switch', h('span', 'Common details', h('div.small.muted', 'Block, district, state, engineer, school timings, holidays, supply… Not copied: name, GPS, staff, students, Head Master, photos and other school-only boxes.')), cDetails),
+            h('label.switch', h('span', 'Room list', h('div.small.muted', 'Same room names, types and floors — without photos')), cRooms),
+            h('label.switch', h('span', 'Checklist answers', h('div.small.muted', 'Conditions, counts and notes (check each one again at the new school)')), cAnswers),
+          ] : null,
+          h('p.small.muted', 'Copied boxes are marked “from last school” until you change them. Nothing is compulsory.')],
         actions: [{ label: 'Cancel', kind: 'ghost' }, { label: 'Create', kind: 'primary', onClick: async () => {
-          const s = U.newSchool(last && copy.checked ? last : null);
+          const from = sel ? others.find((x) => x.id === sel.value) : null;
+          const s = U.newSchool(from, { details: cDetails.checked, rooms: cRooms.checked, answers: cAnswers.checked });
           if (nm.value.trim()) s.data.sd_name = nm.value.trim();
           await U.DB.putSchool(s);
           U.go('/s/' + s.id);
@@ -148,7 +156,7 @@
         U.touch(s);
         acc.setCount(`${filled()}/${total}`, filled() === total);
         if (sec.fields.some((f) => f.id === 'sd_name')) U.$('.top h1').textContent = U.schoolName(s);
-      }), k === 0);
+      }, s.copied || (s.copied = {})), k === 0);
       page.append(acc);
     });
     page.append(h('p.small.muted.center', 'Nothing is compulsory. Everything is saved as you type.'));
@@ -334,6 +342,7 @@
     const idx = live.indexOf(sp);
     const placeOf = (extra) => U.placeName(s, [U.spaceTitle(sp) + (U.spaceWhere(sp) ? ` (${U.spaceWhere(sp)})` : ''), extra].filter(Boolean).join(' · '));
     const menu = U.menuButton([
+      { label: 'Export this room', sub: 'PDF with its photos, data and remarks', run: () => U.exportRooms(s, [sp.id], Object.assign({ what: 'report', fmt: 'pdf', separate: false, data: true, remarks: true }, S.settings.roomExport || {}, { what: 'report', separate: false, brand: S.settings.brand.show && !!(S.settings.brand.company || S.settings.brand.logo), perRow: S.settings.report.photosPerRow, photoSize: S.settings.report.photoSize, appCredit: S.settings.report.appCredit })) },
       { label: 'Edit name, type, block, floor', run: () => editSpace() },
       { label: 'Duplicate this room', sub: 'Copies sizes and counts to a new room', run: () => {
         const c = JSON.parse(JSON.stringify(sp));
@@ -473,6 +482,8 @@
       h('div.field', { style: { marginTop: '10px' } }, h('div.lbl', 'Photos in the report'), perRow),
       h('div.field', h('div.lbl', 'Photo quality in the report'), qual),
       !hasBrand ? h('button.btn.soft.block', { onclick: () => U.go('/settings') }, U.icon('edit'), 'Add company name, logo and report writer') : null));
+
+    page.append(U.roomExportCard(s));
 
     page.append(h('div.card',
       h('h3', 'After the report is saved'),

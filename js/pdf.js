@@ -275,6 +275,8 @@
         await table(b.head, b.widths, b.rows, { total: b.total, numeric: b.numeric });
       } else if (b.t === 'photos') {
         await photos(b.items);
+      } else if (b.t === 'pb') {
+        if (y > TOP + 1) newPage();
       } else if (b.t === 'sign') {
         ensure(90);
         y += 26;

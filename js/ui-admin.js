@@ -184,7 +184,7 @@
         list.forEach((it, ii) => {
           card.append(h('div.ed-item',
             h('div.txt', P.kind === 'fields' ? it.label : `${it.no ? it.no + '  ' : ''}${it.what}`,
-              h('small', P.kind === 'fields' ? (TYPES.find((t) => t[0] === it.type) || [, it.type === 'calc' ? 'Auto (calculated)' : it.type])[1] + (it.options ? ': ' + it.options.join(', ') : '') : it.how)),
+              h('small', P.kind === 'fields' ? (TYPES.find((t) => t[0] === it.type) || [, it.type === 'calc' ? 'Auto (calculated)' : it.type])[1] + (it.options ? ': ' + it.options.join(', ') : '') + (part === 'school' ? (U.isPerSchool(it) ? '  ·  one school only' : '  ·  copied to next school') : '') : it.how)),
             iconBtn('edit', 'Edit', () => (P.kind === 'fields' ? editField(it) : editItem(it))),
             iconBtn('up', 'Up', () => move(list, ii, -1), ii === 0),
             iconBtn('down', 'Down', () => move(list, ii, 1), ii === list.length - 1),
@@ -264,13 +264,16 @@
       const optWrap = h('div.field', h('label', 'Choices'), opts);
       const sync = () => { optWrap.hidden = !(sel.value === 'choice' || sel.value === 'multi'); };
       sel.addEventListener('change', sync); sync();
-      U.modal({ title: isNew ? 'Add box' : 'Edit box', body: [h('div.field', h('label', 'Box name (question)'), lab), h('div.field', h('label', 'Type of answer'), sel), optWrap, h('div.field', h('label', 'Help text'), hint)],
+      const per = h('input', { type: 'checkbox', checked: isNew ? false : U.isPerSchool(fl) });
+      const perRow = part === 'school' ? h('label.switch', h('span', 'Belongs to one school only', h('div.small.muted', 'On = left empty in a new school. Off = copied from the previous school.')), per) : null;
+      U.modal({ title: isNew ? 'Add box' : 'Edit box', body: [h('div.field', h('label', 'Box name (question)'), lab), h('div.field', h('label', 'Type of answer'), sel), optWrap, h('div.field', h('label', 'Help text'), hint), perRow],
         actions: [{ label: 'Cancel', kind: 'ghost' }, { label: 'Save', kind: 'primary', onClick: () => {
           if (!lab.value.trim()) { U.toast('Please type the box name'); return false; }
           fl.label = lab.value.trim();
           if (fl.type !== 'calc') fl.type = sel.value;
           if (fl.type === 'choice' || fl.type === 'multi') fl.options = opts.value.split('\n').map((x) => x.trim()).filter(Boolean); else delete fl.options;
           if (hint.value.trim()) fl.hint = hint.value.trim(); else delete fl.hint;
+          if (part === 'school') fl.perSchool = per.checked;
           if (isNew) list.push(fl);
           save(); U.rerender();
         } }] });

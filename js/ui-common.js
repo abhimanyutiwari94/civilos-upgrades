@@ -62,13 +62,15 @@
   U.autosize = autosize;
 
   /* data: object to write into; onChange(): after each change */
-  U.fieldEl = (fl, data, onChange) => {
+  U.fieldEl = (fl, data, onChange, copied) => {
     const wrap = h('div.field');
     const id = 'f_' + fl.id + '_' + Math.random().toString(36).slice(2, 6);
-    wrap.appendChild(h('label', { for: id }, fl.label));
+    const badge = copied && copied[fl.id] ? h('span.pill', { style: { marginLeft: '6px' } }, 'from last school') : null;
+    wrap.appendChild(h('label', { for: id }, fl.label, badge));
     if (fl.hint) wrap.appendChild(h('div.hint', fl.hint));
     const set = (v) => {
       if (v === '' || v == null || (Array.isArray(v) && !v.length)) delete data[fl.id]; else data[fl.id] = v;
+      if (badge && copied[fl.id]) { delete copied[fl.id]; badge.remove(); }
       onChange && onChange(fl, v);
     };
     const t = fl.type;
@@ -146,8 +148,8 @@
     return wrap;
   };
   /* A group of fields; calc fields refresh when their inputs change. */
-  U.fieldsEl = (fields, data, onChange) => {
-    const els = fields.map((fl) => U.fieldEl(fl, data, () => { els.forEach((e) => e._refresh && e._refresh()); onChange && onChange(); }));
+  U.fieldsEl = (fields, data, onChange, copied) => {
+    const els = fields.map((fl) => U.fieldEl(fl, data, () => { els.forEach((e) => e._refresh && e._refresh()); onChange && onChange(); }, copied));
     return h('div', els);
   };
 

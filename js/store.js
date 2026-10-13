@@ -48,6 +48,7 @@
       stampTime: false,
       stampSize: 'small',
     },
+    roomExport: { what: 'report', fmt: 'pdf', separate: false, data: true, remarks: true },
     lastFormat: 'pdf',
     lastSaveFolderHint: '',
   });
@@ -74,7 +75,12 @@
     return S.schools;
   };
 
-  U.newSchool = (copyFrom) => {
+  /* true = this box belongs to one school only and is never copied to the next school */
+  U.isPerSchool = (fl) => (fl.perSchool != null ? !!fl.perSchool : (self.CU_PER_SCHOOL || []).includes(fl.id) || fl.type === 'gps' || fl.type === 'calc');
+
+  /* New school. copyFrom = previous school; what = { details, rooms, answers } */
+  U.newSchool = (copyFrom, what) => {
+    what = what || { details: true };
     const s = {
       id: U.uid('s'),
       v: 1,
@@ -85,9 +91,26 @@
       spaces: [],
       photoSeq: 0,
       lastOutputAt: null,
+      copied: {},
     };
+    const clone = (v) => (v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v);
+    if (copyFrom && what.details) {
+      for (const sec of S.template.school) for (const fl of sec.fields) {
+        if (U.isPerSchool(fl)) continue;
+        const v = copyFrom.data[fl.id];
+        if (v == null || v === '' || (Array.isArray(v) && !v.length)) continue;
+        s.data[fl.id] = clone(v);
+        s.copied[fl.id] = true;
+      }
+    }
+    if (copyFrom && what.answers) s.checks = clone(copyFrom.checks || {});
+    if (copyFrom && what.rooms) {
+      for (const sp of U.liveSpaces(copyFrom)) {
+        s.spaces.push({ id: U.uid('r'), typeId: sp.typeId, name: sp.name, block: sp.block || '', floor: sp.floor || '',
+          useChecklist: sp.useChecklist, data: what.answers ? clone(sp.data || {}) : {}, checks: what.answers ? clone(sp.checks || {}) : {}, notes: '', created: Date.now() });
+      }
+    }
     for (const sec of S.template.school) for (const fl of sec.fields) if (fl.type === 'date' && fl.today) s.data[fl.id] = U.isoDate();
-    if (copyFrom) for (const k of ['sd_block', 'sd_district', 'sd_state', 'sd_engineer', 'sd_engmobile']) if (copyFrom.data[k]) s.data[k] = copyFrom.data[k];
     return s;
   };
   U.schoolName = (s) => (s && s.data && String(s.data.sd_name || '').trim()) || 'School (no name yet)';

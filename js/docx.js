@@ -109,6 +109,8 @@
           xml += row(cells.join(''));
         }
         body.push(tbl(xml, Array(per).fill(cw), { noBorder: true }));
+      } else if (b.t === 'pb') {
+        body.push('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
       } else if (b.t === 'sign') {
         const w = CW / 2;
         const sc = (t) => cell(P('', { after: 600 }) + P('______________________________', { after: 40 }) + P(t, { style: 'Small' }), w, { noBorder: true });

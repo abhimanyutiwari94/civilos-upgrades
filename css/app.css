@@ -267,6 +267,11 @@ select.inp { appearance: auto; }
 .shutter { width: 78px; height: 78px; border-radius: 50%; border: 5px solid #fff; background: transparent; padding: 5px; flex: none; }
 .shutter i { display: block; width: 100%; height: 100%; border-radius: 50%; background: var(--saffron); }
 .shutter:active i { transform: scale(0.9); }
+.shutter.wait i { background: #ffc078; transform: scale(0.86); transition: transform 0.1s; }
+.cam-hint { position: absolute; left: 50%; top: calc(86px + env(safe-area-inset-top)); transform: translateX(-50%); z-index: 2; font-size: 12px; padding: 4px 10px; border-radius: 99px; background: rgba(0, 0, 0, 0.45); white-space: nowrap; pointer-events: none; }
+.cam-focus { position: fixed; z-index: 3; width: 74px; height: 74px; margin: -37px 0 0 -37px; border: 2px solid #ffd27a; border-radius: 50%; opacity: 0; pointer-events: none; }
+.cam-focus.go { animation: camfocus 0.9s ease-out; }
+@keyframes camfocus { 0% { opacity: 1; transform: scale(1.4); } 40% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1); } }
 .cam-done { position: relative; width: 56px; height: 56px; border-radius: 12px; border: 2px solid #fff; background: #222; padding: 0; overflow: hidden; color: #fff; }
 .cam-last { width: 100%; height: 100%; object-fit: cover; display: block; }
 .cam-last:not([src]) { display: none; }

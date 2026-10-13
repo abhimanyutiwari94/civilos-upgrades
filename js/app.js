@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const U = self.U, S = U.S, h = U.h;
-  self.CU_VERSION = '1.0.0';
+  self.CU_VERSION = '1.1.0';
   let root = null;
   const scrolls = new Map();
   let curKey = '';
