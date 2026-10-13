@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const U = self.U, S = U.S, h = U.h;
-  self.CU_VERSION = '1.3.0';
+  self.CU_VERSION = '1.3.1';
   let root = null;
   const scrolls = new Map();
   let curKey = '';
@@ -57,6 +57,10 @@
     '1.3.0': ['Every report and export now carries the Sakshham Consultants logo, colours and page format (PDF, Word, Excel, room-wise).',
       'Project / Client / Document / Date strip at the top, orange section bars, coloured condition cells.',
       'Report title, project, client and report writer: Settings › Report details.'],
+    '1.3.1': ['Remove a photo easily: red bin button at the top of every photo.',
+      'In the camera: “Remove last photo” undoes a blurred or wrong shot.',
+      '“Select to remove” under the photos: remove several photos at once.',
+      'Removed photos stay in “Recently deleted” (school menu) until you delete them for ever.'],
   };
   function showWhatsNew() {
     let seen = '';

@@ -162,6 +162,28 @@
     }, t)));
 
     const ring = h('div.cam-focus');
+    /* "Remove last photo": undo a blurred or wrong shot without leaving the camera */
+    const taken = []; // [{ id, url }] photos saved in this camera session, newest last
+    const undoBtn = h('button.cam-undo', { type: 'button', onclick: () => undoLast() }, U.icon('trash'), 'Remove last photo');
+    const undoRow = h('div.cam-undo-row', undoBtn);
+    undoRow.hidden = true;
+    const showLast = () => {
+      const last = taken[taken.length - 1];
+      lastImg.src = last ? last.url : '';
+      if (!last) lastImg.removeAttribute('src');
+      countEl.textContent = String(count);
+      undoRow.hidden = !taken.length;
+    };
+    async function undoLast() {
+      const last = taken[taken.length - 1];
+      if (!last || busy > 0) { if (busy > 0) U.toast('Wait — the photo is still saving'); return; }
+      await U.removePhotos([last.id]);
+      taken.pop();
+      URL.revokeObjectURL(last.url);
+      count = Math.max(0, count - 1);
+      showLast();
+      U.toast('Last photo removed — take it again');
+    }
     const shutterBtn = h('button.shutter', { 'aria-label': 'Take photo', onclick: () => shoot() }, h('i'));
     const hint = h('div.cam-hint', 'Hold still · tap the picture to focus');
     const root = h('div.camera',
@@ -182,7 +204,8 @@
           h('div.cam-side',
             torchBtn,
             h('button.cam-round', { 'aria-label': 'Switch camera', onclick: flip }, U.icon('flip')),
-            h('button.cam-done', { onclick: () => close() }, lastImg, countEl, savingEl)))));
+            h('button.cam-done', { onclick: () => close() }, lastImg, countEl, savingEl))),
+        undoRow));
     root.appendChild(ring);
     document.body.appendChild(root);
     document.body.classList.add('cam-open');
@@ -352,12 +375,10 @@
       queue = queue.then(async () => {
         try {
           const r = await U.stampPhoto(blob, U.stampLines(place, fix, ts), { maxSide: st.maxSide, quality: st.quality, size: st.stampSize });
-          await opts.onSave(Object.assign(r, { fix, ts, tag: thisTag, place, source }));
+          const meta = await opts.onSave(Object.assign(r, { fix, ts, tag: thisTag, place, source }));
           count++;
-          countEl.textContent = String(count);
-          const u = URL.createObjectURL(r.thumb);
-          if (lastImg.dataset.u) URL.revokeObjectURL(lastImg.dataset.u);
-          lastImg.dataset.u = u; lastImg.src = u;
+          if (meta && meta.id) taken.push({ id: meta.id, url: URL.createObjectURL(r.thumb) });
+          showLast();
         } catch (e) {
           U.toast('Photo not saved: ' + (e.message || e));
         } finally { busy--; showBusy(); }
@@ -408,7 +429,7 @@
       if (busy > 0) { const b = U.busy('Saving photos…'); await queue; b.done(); }
       root.remove();
       document.body.classList.remove('cam-open');
-      if (lastImg.dataset.u) URL.revokeObjectURL(lastImg.dataset.u);
+      taken.forEach((t) => URL.revokeObjectURL(t.url));
       if (opts.onClose) opts.onClose(count);
     }
 

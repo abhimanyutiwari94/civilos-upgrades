@@ -234,23 +234,66 @@
     } else U.openCamera(opts);
   };
 
-  /* Thumbnails + add button. */
+  /* Remove photos: they go to "Recently deleted" (school menu) and can be brought back. */
+  U.removePhotos = async (ids) => {
+    const at = Date.now();
+    for (const id of ids) {
+      await U.DB.updatePhotoMeta(id, { deleted: at });
+      const m = (S.photos || []).find((x) => x.id === id);
+      if (m) m.deleted = at;
+    }
+    if (S.cur) { S.cur.photoCount = (S.photos || []).filter((p) => !p.deleted).length; U.touch(S.cur); }
+  };
+
+  /* Thumbnails + add button, with "Select" to remove several photos at once. */
   U.photoStrip = (school, target, place, caption, onChange) => {
     const box = h('div.thumbs');
+    const bar = h('div.strip-bar');
+    const wrap = h('div.strip', box, bar);
+    let selecting = false;
+    const chosen = new Set();
+    const changed = () => { draw(); onChange && onChange(); };
+    const drawBar = (count) => {
+      U.clear(bar);
+      if (!count) return;
+      if (!selecting) {
+        bar.append(h('button.btn.small.ghost', { type: 'button', onclick: () => { selecting = true; chosen.clear(); draw(); } }, U.icon('check'), 'Select to remove'));
+        return;
+      }
+      bar.append(
+        h('span.small.grow', chosen.size ? `${chosen.size} selected` : 'Tap photos to select'),
+        h('button.btn.small.ghost', { type: 'button', onclick: () => { selecting = false; chosen.clear(); draw(); } }, 'Cancel'),
+        h('button.btn.small.danger', { type: 'button', disabled: !chosen.size, onclick: async () => {
+          const n = chosen.size;
+          if (!(await U.confirm(`Remove ${n} photo${n > 1 ? 's' : ''}? They go to "Recently deleted" in the school menu, where you can bring them back.`, { ok: 'Remove', danger: true }))) return;
+          await U.removePhotos([...chosen]);
+          selecting = false; chosen.clear();
+          U.toast(`${n} photo${n > 1 ? 's' : ''} removed`);
+          changed();
+        } }, U.icon('trash'), 'Remove'));
+    };
     const draw = async () => {
       U.clear(box);
-      box.appendChild(h('button.add-photo', { type: 'button', onclick: () => U.takePhotos(school, target, place(), caption, () => { draw(); onChange && onChange(); }) },
-        U.icon('camera'), 'Add photo'));
+      if (!selecting) box.appendChild(h('button.add-photo', { type: 'button', onclick: () => U.takePhotos(school, target, place(), caption, changed) }, U.icon('camera'), 'Add photo'));
       const list = U.photosFor(target);
       for (const p of list) {
         const img = h('img', { alt: U.photoNo(p), loading: 'lazy' });
-        box.appendChild(h('button.thumb', { type: 'button', onclick: () => U.viewPhoto(list, list.indexOf(p), () => { draw(); onChange && onChange(); }) }, img, h('span.no', U.photoNo(p))));
+        const tick = h('span.pick', U.icon('check'));
+        const t = h('button.thumb' + (chosen.has(p.id) ? '.picked' : ''), { type: 'button', onclick: () => {
+          if (!selecting) { U.viewPhoto(list, list.indexOf(p), changed); return; }
+          if (chosen.has(p.id)) chosen.delete(p.id); else chosen.add(p.id);
+          t.classList.toggle('picked', chosen.has(p.id));
+          drawBar(list.length);
+        } }, img, h('span.no', U.photoNo(p)), selecting ? tick : null);
+        box.appendChild(t);
         U.thumbURL(p.id).then((u) => { img.src = u; });
       }
+      if (selecting && !list.length) selecting = false;
+      drawBar(list.length);
     };
     draw();
-    box.redraw = draw;
-    return box;
+    wrap.redraw = draw;
+    return wrap;
   };
 
   /* Full-screen photo viewer with caption, tag, move and delete. */
@@ -261,7 +304,8 @@
     const sub = h('div.small', { style: { opacity: 0.85 } });
     const panel = h('div.viewer-panel');
     const root = h('div.viewer',
-      h('div.cam-top', h('button.cam-round', { 'aria-label': 'Close', onclick: () => close() }, U.icon('x')), h('div.cam-top-mid', title, sub)),
+      h('div.cam-top', h('button.cam-round', { 'aria-label': 'Close', onclick: () => close() }, U.icon('x')), h('div.cam-top-mid', title, sub),
+        h('button.cam-round.cam-del', { 'aria-label': 'Remove this photo', title: 'Remove this photo', onclick: () => removeCurrent() }, U.icon('trash'))),
       h('div.viewer-img', img,
         h('button.cam-round.viewer-nav.prev', { 'aria-label': 'Previous', onclick: () => go(-1) }, U.icon('back')),
         h('button.cam-round.viewer-nav.next', { 'aria-label': 'Next', onclick: () => go(1) }, h('span', { style: { transform: 'scaleX(-1)', display: 'inline-flex' } }, U.icon('back')))),
@@ -295,21 +339,22 @@
         e.currentTarget.blur();
       } }, t)));
       panel.append(
-        h('div.field', h('label', 'Caption'), cap),
-        h('div.lbl.small.muted', 'Tag'), tags,
-        h('div.row.wrap', { style: { marginTop: '6px' } },
+        h('div.row.wrap', { style: { marginBottom: '10px', gap: '8px' } },
+          h('button.btn.small.danger', { onclick: () => removeCurrent() }, U.icon('trash'), 'Remove photo'),
           h('button.btn.small', { onclick: () => movePhoto(p) }, U.icon('room'), 'Move to…'),
-          h('button.btn.small', { onclick: async () => { const f = await U.DB.photo(p.id); if (!f) return; const nm = U.safeFileName(U.photoCaption(p)) + '.jpg'; if (!(await U.shareBlob(f.blob, nm, 'image/jpeg'))) U.downloadBlob(f.blob, nm); } }, U.icon('share'), 'Share'),
-          h('button.btn.small', { style: { color: 'var(--bad)' }, onclick: async () => {
-            if (!(await U.confirm('Remove this photo? It goes to "Recently deleted" in the school menu, where you can bring it back.', { ok: 'Remove', danger: true }))) return;
-            p.deleted = Date.now();
-            await U.DB.updatePhotoMeta(p.id, { deleted: p.deleted });
-            const m = (S.photos || []).find((x) => x.id === p.id); if (m) m.deleted = p.deleted;
-            if (S.cur) { S.cur.photoCount = Math.max(0, (S.cur.photoCount || 1) - 1); U.touch(S.cur); }
-            list.splice(i, 1);
-            onChange && onChange();
-            if (!list.length) close(); else { i = Math.min(i, list.length - 1); show(); }
-          } }, U.icon('trash'), 'Remove')));
+          h('button.btn.small', { onclick: async () => { const f = await U.DB.photo(p.id); if (!f) return; const nm = U.safeFileName(U.photoCaption(p)) + '.jpg'; if (!(await U.shareBlob(f.blob, nm, 'image/jpeg'))) U.downloadBlob(f.blob, nm); } }, U.icon('share'), 'Share')),
+        h('div.field', h('label', 'Caption'), cap),
+        h('div.lbl.small.muted', 'Tag'), tags);
+    }
+    async function removeCurrent() {
+      const p = list[i];
+      if (!p) return;
+      if (!(await U.confirm('Remove this photo? It goes to "Recently deleted" in the school menu, where you can bring it back.', { ok: 'Remove', danger: true }))) return;
+      await U.removePhotos([p.id]);
+      list.splice(i, 1);
+      onChange && onChange();
+      U.toast('Photo removed');
+      if (!list.length) close(); else { i = Math.min(i, list.length - 1); show(); }
     }
     async function movePhoto(p) {
       const s = S.cur;
