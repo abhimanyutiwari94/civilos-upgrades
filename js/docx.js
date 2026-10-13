@@ -4,7 +4,8 @@
   const U = self.U;
   const X = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
-  const PAGE_W = 11906, PAGE_H = 16838, MAR = 720;
+  const PAGE_W = 11906, PAGE_H = 16838, MAR = 680;
+  const NAVY = '214366', ORANGE = 'F28120', LABEL = 'D6E4F0', VALUE = 'FFF9C4';
   const CW = PAGE_W - 2 * MAR; // twips
   const EMU = 635; // per twip
 
@@ -53,22 +54,16 @@
 
     for (const b of rep.blocks) {
       if (b.t === 'cover') {
-        if (b.logo || b.company) {
-          let left = '';
-          if (b.logo) {
-            try {
-              const lg = await U.logoImages(b.logo);
-              const hT = 900, wT = Math.min(3200, (lg.w / lg.h) * hT);
-              left = `<w:p>${drawing(addMedia(lg.png, 'png'), Math.round(wT * EMU), Math.round((wT / lg.w) * lg.h * EMU))}</w:p>`;
-            } catch (e) { left = ''; }
-          }
-          const lw = left ? 3400 : 0;
-          body.push(tbl(row(cell(left || P(''), lw || 1, { noBorder: true }) + cell(P(b.company || '', { bold: true, size: 28 }), CW - (lw || 1), { noBorder: true })), [lw || 1, CW - (lw || 1)], { noBorder: true }));
+        const st = (rep.lh && rep.lh.strip) || [];
+        if (st.length) {
+          const w4 = CW / st.length;
+          const head = row(st.map((c) => cell(cellP(c[0], { bold: true, color: NAVY, align: 'center' }), w4, { fill: LABEL })).join(''));
+          const vals = row(st.map((c) => cell(cellP(c[1] || '', { bold: true, align: 'center', size: 17 }), w4)).join(''));
+          body.push(tbl(head + vals, st.map(() => w4)));
         }
-        body.push(P(b.title, { style: 'Title' }));
         body.push(P(b.school, { style: 'Subtitle' }));
         body.push(kvTable(b.meta, [0.25, 0.75]));
-      } else if (b.t === 'h1') body.push(P(b.text, { style: 'Heading1' }));
+      } else if (b.t === 'h1') body.push(P(String(b.text).toUpperCase(), { style: 'Heading1' }));
       else if (b.t === 'h2') { body.push(P(b.text, { style: 'Heading2' })); if (b.sub) body.push(P(b.sub, { style: 'Small', keep: true })); }
       else if (b.t === 'p') body.push(P(b.text, { bold: b.bold, color: b.muted ? '6E6E6E' : null }));
       else if (b.t === 'kv') {
@@ -79,9 +74,9 @@
         } else body.push(kvTable(b.rows, [0.38, 0.62]));
       } else if (b.t === 'table') {
         const ws = b.widths.map((w) => w * CW);
-        let xml = row(b.head.map((hd, i) => cell(cellP(hd, { bold: true }), ws[i], { fill: 'EBEBEB' })).join(''), { head: true });
-        for (const r of b.rows) xml += row(r.map((c, i) => cell(cellP(c, { align: b.numeric && i >= 2 ? 'right' : null }), ws[i])).join(''));
-        if (b.total) xml += row(b.total.map((c, i) => cell(cellP(c, { bold: true, align: b.numeric && i >= 2 ? 'right' : null }), ws[i], { fill: 'F5F5F5' })).join(''));
+        let xml = row(b.head.map((hd, i) => cell(cellP(hd, { bold: true, color: 'FFFFFF', align: 'center' }), ws[i], { fill: NAVY })).join(''), { head: true });
+        for (const r of b.rows) xml += row(r.map((c, i) => { const cf = b.cond === i ? U.condRGB(c) : null; return cell(cellP(c, { align: b.numeric && i >= 2 ? 'right' : null }), ws[i], { fill: cf ? U.hex(cf) : null }); }).join(''));
+        if (b.total) xml += row(b.total.map((c, i) => cell(cellP(c, { bold: true, color: NAVY, align: b.numeric && i >= 2 ? 'right' : null }), ws[i], { fill: LABEL })).join(''));
         body.push(tbl(xml, ws));
       } else if (b.t === 'photos') {
         const per = rep.perRow;
@@ -120,20 +115,26 @@
 
     function kvTable(rows, fr) {
       const ws = fr.map((f) => f * CW);
-      const xml = rows.map((r) => row(r.map((c, i) => cell(cellP(c, { bold: i % 2 === 0 }), ws[i], { fill: i % 2 === 0 ? 'F6F6F6' : null })).join(''))).join('');
+      const xml = rows.map((r) => row(r.map((c, i) => cell(cellP(c, { bold: i % 2 === 0, color: i % 2 === 0 ? NAVY : null }), ws[i], { fill: i % 2 === 0 ? LABEL : (c ? VALUE : null) })).join(''))).join('');
       return tbl(xml, ws);
     }
 
     if (progress) progress('Making the Word file…', 0.93);
     const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"';
-    const sect = `<w:sectPr><w:headerReference w:type="default" r:id="rIdH"/><w:footerReference w:type="default" r:id="rIdF"/><w:footerReference w:type="first" r:id="rIdF1"/><w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}"/><w:pgMar w:top="900" w:right="${MAR}" w:bottom="900" w:left="${MAR}" w:header="400" w:footer="400" w:gutter="0"/><w:titlePg/></w:sectPr>`;
+    const sect = `<w:sectPr><w:headerReference w:type="default" r:id="rIdH"/><w:footerReference w:type="default" r:id="rIdF"/><w:pgSz w:w="${PAGE_W}" w:h="${PAGE_H}"/><w:pgMar w:top="1750" w:right="${MAR}" w:bottom="900" w:left="${MAR}" w:header="360" w:footer="360" w:gutter="0"/></w:sectPr>`;
     const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document ${NS}><w:body>${body.join('')}${sect}</w:body></w:document>`;
 
-    const header = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:hdr ${NS}><w:p><w:pPr><w:pStyle w:val="Small"/><w:tabs><w:tab w:val="right" w:pos="${CW}"/></w:tabs></w:pPr>${runs(rep.header || '')}<w:r><w:tab/></w:r>${runs(rep.header === rep.school ? '' : rep.school)}</w:p></w:hdr>`;
-    const left = [rep.footer, rep.credit].filter(Boolean).join('   ·   ');
+    const L = rep.lh || {};
+    const lg = await U.companyLogo();
+    const logoW = 2900, logoH = Math.round((lg.h / lg.w) * logoW); // twips
+    const hdrPic = `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${logoW * EMU}" cy="${logoH * EMU}"/><wp:docPr id="9001" name="Logo"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="9001" name="Logo"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rIdLogo"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${logoW * EMU}" cy="${logoH * EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
+    const rightW = CW - 3100;
+    const hdrRight = P(L.title || rep.title, { bold: true, color: NAVY, align: 'right', after: 20, size: 17 })
+      + `<w:p><w:pPr><w:spacing w:after="20"/><w:jc w:val="right"/></w:pPr><w:r><w:rPr><w:b/><w:i/><w:color w:val="${ORANGE}"/><w:sz w:val="16"/></w:rPr><w:t xml:space="preserve">${X(L.sub || rep.school)}</w:t></w:r></w:p>`;
+    const header = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:hdr ${NS}><w:tbl><w:tblPr><w:tblW w:w="${CW}" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="single" w:sz="12" w:color="${ORANGE}"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="3100"/><w:gridCol w:w="${rightW}"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="3100" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:spacing w:after="60"/></w:pPr>${hdrPic}</w:p></w:tc><w:tc><w:tcPr><w:tcW w:w="${rightW}" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>${hdrRight}</w:tc></w:tr></w:tbl><w:p><w:pPr><w:spacing w:after="0"/></w:pPr></w:p></w:hdr>`;
     const pageField = `<w:r><w:t xml:space="preserve">Page </w:t></w:r><w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple><w:r><w:t xml:space="preserve"> of </w:t></w:r><w:fldSimple w:instr=" NUMPAGES "><w:r><w:t>1</w:t></w:r></w:fldSimple>`;
-    const footer = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:ftr ${NS}><w:p><w:pPr><w:pStyle w:val="Small"/><w:tabs><w:tab w:val="right" w:pos="${CW}"/></w:tabs></w:pPr>${runs(left)}<w:r><w:tab/></w:r>${pageField}</w:p></w:ftr>`;
-    // first page: footer only (no running header above the title)
+    const right = [L.footRight, rep.footer, rep.credit].filter(Boolean).join('  |  ');
+    const footer = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:ftr ${NS}><w:p><w:pPr><w:pStyle w:val="Small"/><w:pBdr><w:top w:val="single" w:sz="4" w:space="4" w:color="BFBFBF"/></w:pBdr><w:tabs><w:tab w:val="center" w:pos="${Math.round(CW / 2)}"/><w:tab w:val="right" w:pos="${CW}"/></w:tabs></w:pPr>${runs(L.footLeft || '')}<w:r><w:tab/></w:r>${pageField}<w:r><w:tab/></w:r>${runs(right)}</w:p></w:ftr>`;
     const footerFirst = footer;
 
     const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -141,11 +142,11 @@
 <w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Arial" w:cs="Nirmala UI"/><w:sz w:val="18"/><w:szCs w:val="18"/><w:lang w:val="en-IN" w:bidi="hi-IN"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="80" w:line="252" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
 <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
 <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:before="120" w:after="40"/></w:pPr><w:rPr><w:b/><w:bCs/><w:sz w:val="34"/><w:szCs w:val="34"/></w:rPr></w:style>
-<w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:after="160"/></w:pPr><w:rPr><w:b/><w:bCs/><w:color w:val="3C3C3C"/><w:sz w:val="26"/><w:szCs w:val="26"/></w:rPr></w:style>
-<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="2" w:color="5A5A5A"/></w:pBdr><w:spacing w:before="280" w:after="120"/><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:bCs/><w:sz w:val="25"/><w:szCs w:val="25"/></w:rPr></w:style>
-<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="200" w:after="60"/><w:outlineLvl w:val="1"/></w:pPr><w:rPr><w:b/><w:bCs/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr></w:style>
-<w:style w:type="paragraph" w:styleId="Cell"><w:name w:val="Table text"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:rPr><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr></w:style>
-<w:style w:type="paragraph" w:styleId="Caption"><w:name w:val="caption"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="0"/></w:pPr><w:rPr><w:b/><w:bCs/><w:sz w:val="15"/><w:szCs w:val="15"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:before="120" w:after="100"/></w:pPr><w:rPr><w:b/><w:bCs/><w:color w:val="214366"/><w:sz w:val="26"/><w:szCs w:val="26"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:shd w:val="clear" w:color="auto" w:fill="F28120"/><w:spacing w:before="240" w:after="100"/><w:ind w:left="60" w:right="60"/><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:bCs/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="200" w:after="60"/><w:outlineLvl w:val="1"/></w:pPr><w:rPr><w:b/><w:bCs/><w:color w:val="214366"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Cell"><w:name w:val="Table text"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:rPr><w:color w:val="333333"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Caption"><w:name w:val="caption"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="0"/></w:pPr><w:rPr><w:b/><w:bCs/><w:color w:val="214366"/><w:sz w:val="15"/><w:szCs w:val="15"/></w:rPr></w:style>
 <w:style w:type="paragraph" w:styleId="Small"><w:name w:val="Small text"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="40"/></w:pPr><w:rPr><w:color w:val="6E6E6E"/><w:sz w:val="14"/><w:szCs w:val="14"/></w:rPr></w:style>
 <w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:tblPr><w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style>
 </w:styles>`;
@@ -169,6 +170,8 @@
     await z.add('word/settings.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:updateFields w:val="false"/><w:defaultTabStop w:val="720"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`);
     await z.add('word/header1.xml', header);
+    await z.add('word/_rels/header1.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdLogo" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/company-logo.png"/></Relationships>');
+    await z.add('word/media/company-logo.png', lg.png, false);
     await z.add('word/footer1.xml', footer);
     await z.add('word/footer2.xml', footerFirst);
     await z.add('word/_rels/document.xml.rels', rels);

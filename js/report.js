@@ -19,6 +19,43 @@
   };
   U.condLabel = (id) => { const c = U.T.cond(id); return c ? c.label : (id || ''); };
 
+  /* Sakshham Consultants report look — colours from the company's own checklist. */
+  U.THEME = {
+    navy: [33, 67, 102], orange: [242, 129, 32], ink: [51, 51, 51], muted: [110, 110, 110],
+    label: [214, 228, 240], value: [255, 249, 196], grey: [242, 242, 242], line: [191, 191, 191],
+    company: 'Sakshham Consultants', web: 'www.sakshham.com',
+  };
+  const COND_RGB = { good: [226, 239, 218], repair: [255, 230, 153], replace: [248, 203, 173], notavail: [217, 210, 233], na: [231, 230, 230], rebuild: [248, 203, 173] };
+  /* fill colour for a condition cell, from its label (or null) */
+  U.condRGB = (label) => {
+    if (!label) return null;
+    const c = (U.S.template.conditions || []).find((x) => x.label === label);
+    if (!c) return null;
+    return COND_RGB[c.id] || { ok: COND_RGB.good, warn: COND_RGB.repair, bad: COND_RGB.replace, new: COND_RGB.notavail, mute: COND_RGB.na }[c.tone] || null;
+  };
+  U.hex = (rgb) => rgb.map((v) => v.toString(16).padStart(2, '0')).join('').toUpperCase();
+  /* the fixed company logo (PNG for Word/Excel, JPEG for PDF) */
+  let logoCache = null;
+  U.companyLogo = async () => {
+    if (logoCache) return logoCache;
+    const get = async (f) => new Uint8Array(await (await fetch(f)).arrayBuffer());
+    logoCache = { png: await get(U.LOGO_PNG || 'icons/sakshham-logo.png'), jpg: await get(U.LOGO_JPG || 'icons/sakshham-logo.jpg'), w: 1200, h: 252 };
+    return logoCache;
+  };
+  /* top-of-every-page text and the Project / Client / Document / Date strip */
+  U.letterhead = (school, o, kind) => {
+    const b = U.S.settings.brand;
+    const name = U.schoolName(school);
+    const doc = U.safeFileName(o.docName || `${name} - ${kind || 'Site Visit Report'}`);
+    return {
+      title: `${(b.reportTitle || 'SCHOOL SITE VISIT REPORT').toUpperCase()}  |  ${(b.projectName || 'CSR SCHOOL RENOVATION').toUpperCase()}`,
+      sub: [kind || 'School Site Visit', [name, school.data.sd_district].filter(Boolean).join(', ')].filter(Boolean).join('  |  '),
+      strip: [['PROJECT', b.projectName || 'CSR School Renovation'], ['CLIENT', b.preparedFor || ''], ['DOCUMENT', doc], ['DATE', U.fmtDate(school.data.sd_date || Date.now())]],
+      footLeft: `${U.THEME.company}  |  ${U.THEME.web}`,
+      footRight: `${doc}  |  Confidential`,
+    };
+  };
+
   /* ---------- photos grouped by what they belong to ---------- */
   U.photoGroups = (photos) => {
     const g = new Map();
@@ -61,13 +98,11 @@
     const place = U.schoolPlace(school);
     if (place) meta.push(['Location', place]);
     if (school.data.sd_date) meta.push(['Date of visit', U.fmtDate(school.data.sd_date)]);
-    if (o.brand && b.projectName) meta.push(['Project', b.projectName]);
-    if (o.brand && b.preparedFor) meta.push(['Prepared for', b.preparedFor]);
-    if (o.brand && b.writer) meta.push(['Report by', [b.writer, b.designation].filter(Boolean).join(', ')]);
-    if (o.brand && (b.phone || b.email)) meta.push(['Contact', [b.phone, b.email].filter(Boolean).join('  ·  ')]);
+    if (school.data.sd_udise) meta.push(['UDISE code', school.data.sd_udise]);
+    if (b.writer || school.data.sd_engineer) meta.push(['Report by', [b.writer || school.data.sd_engineer, b.designation].filter(Boolean).join(', ')]);
+    if (b.phone || b.email) meta.push(['Contact', [b.phone, b.email].filter(Boolean).join('  ·  ')]);
     meta.push(['Report date', U.fmtDate(Date.now())]);
-    blocks.push({ t: 'cover', title: (o.brand && b.reportTitle) || 'School Infrastructure Survey Report', school: name, meta,
-      company: brand ? b.company : '', logo: brand ? b.logo : null });
+    blocks.push({ t: 'cover', title: 'School Site Visit Report', school: name, meta });
 
     let secNo = 0;
     const H1 = (text) => blocks.push({ t: 'h1', text: `${++secNo}. ${text}` });
@@ -115,7 +150,7 @@
       if (work.length) {
         blocks.push({ t: 'p', text: 'Items that need work (repair, replace, new, or rebuild):', bold: true });
         blocks.push({ t: 'table', head: ['Location', 'No.', 'Item', 'Condition', 'Count / Size', 'Notes'],
-          widths: [0.17, 0.07, 0.24, 0.14, 0.14, 0.24], rows: work });
+          widths: [0.17, 0.07, 0.24, 0.14, 0.14, 0.24], rows: work, cond: 3 });
       } else blocks.push({ t: 'p', text: 'No item has been marked as needing work yet.', muted: true });
     }
 
@@ -201,12 +236,14 @@
 
     if (o.signatures) blocks.push({ t: 'sign', items: ['Surveyed by (name, signature, date)', 'Head Master / Principal (name, signature, date)'] });
 
+    const lh = U.letterhead(school, o, 'School Site Visit');
     return {
       blocks,
-      title: (o.brand && b.reportTitle) || 'School Infrastructure Survey Report',
+      lh,
+      title: 'School Site Visit Report',
       school: name,
-      header: brand ? b.company : name,
-      footer: o.brand && b.footerNote ? b.footerNote : '',
+      header: name,
+      footer: b.footerNote || '',
       credit: o.appCredit ? 'Prepared with CivilOS Upgrades' : '',
       perRow: o.perRow || 2,
       photoSize: o.photoSize || 1400,

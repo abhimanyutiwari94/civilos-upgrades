@@ -455,7 +455,7 @@
     const defName = U.safeFileName(`${U.schoolName(s)} - Survey Report - ${U.fmtDate(s.data.sd_date || Date.now())}`);
     const fname = h('input.inp'); fname.value = defName;
     const hasBrand = !!(b.company || b.logo);
-    const opt = { brand: b.show && hasBrand, includeBlank: r.includeBlank, includeHow: r.includeHow, summary: r.summary, quantities: r.quantities, photos: true, signatures: r.signatures, appCredit: r.appCredit, perRow: r.photosPerRow, photoSize: r.photoSize };
+    const opt = { docName: '', brand: true, includeBlank: r.includeBlank, includeHow: r.includeHow, summary: r.summary, quantities: r.quantities, photos: true, signatures: r.signatures, appCredit: r.appCredit, perRow: r.photosPerRow, photoSize: r.photoSize };
     const sw = (key, label, sub, disabled) => {
       const c = h('input', { type: 'checkbox', checked: !!opt[key], disabled: !!disabled });
       c.addEventListener('change', () => {
@@ -481,7 +481,7 @@
       h('div.row', { style: { gap: '8px' } },
         h('button.btn.soft.big.grow', { onclick: async () => {
           await U.flushSave();
-          const rep = U.buildReport(s, U.reportablePhotos(s, await U.loadPhotos(s)), opt);
+          const rep = U.buildReport(s, U.reportablePhotos(s, await U.loadPhotos(s)), Object.assign({}, opt, { docName: fname.value }));
           U.previewReport(rep, { title: fname.value, note: fmt === 'xlsx' ? 'Preview of the content. In Excel the same data comes in separate sheets (Summary, Work required, Checklist, Rooms, Photos).' : null, onSave: () => U.makeReportFlow(s, fmt, fname.value, opt) });
         } }, U.icon('doc'), 'Preview'),
         h('button.btn.primary.big.grow', { onclick: () => U.makeReportFlow(s, fmt, fname.value, opt) }, U.icon('print'), 'Save report')),
@@ -491,7 +491,7 @@
 
     page.append(h('div.card',
       h('h3', 'What to include'),
-      sw('brand', 'Print my company name and logo', hasBrand ? (b.company || 'Logo added') : 'Not set up — add them in Settings first', !hasBrand),
+      h('p.small.muted', { style: { margin: '0 0 6px' } }, 'Sakshham Consultants logo, colours and page format are always printed.'),
       sw('summary', 'Summary of work required'),
       sw('quantities', 'Rooms and quantities table', 'Sizes, areas and counts with totals'),
       sw('includeBlank', 'Show empty items too', 'Off = only items with an answer or photo (cleaner report)'),
@@ -500,7 +500,7 @@
       sw('appCredit', "Print 'Prepared with CivilOS Upgrades' in the footer", 'Off = no app name anywhere in the report'),
       h('div.field', { style: { marginTop: '10px' } }, h('div.lbl', 'Photos in the report'), perRow),
       h('div.field', h('div.lbl', 'Photo quality in the report'), qual),
-      !hasBrand ? h('button.btn.soft.block', { onclick: () => U.go('/settings') }, U.icon('edit'), 'Add company name, logo and report writer') : null));
+      h('button.btn.soft.block', { onclick: () => U.go('/settings') }, U.icon('edit'), 'Report title, project, client and report writer')));
 
     page.append(U.roomExportCard(s));
 
@@ -526,7 +526,7 @@
     let blob;
     try {
       const photos = U.reportablePhotos(s, await U.loadPhotos(s));
-      const rep = U.buildReport(s, photos, opt);
+      const rep = U.buildReport(s, photos, Object.assign({}, opt, { docName: name }));
       rep.opts = opt;
       const prog = (m, f) => busy.set(m, f);
       if (fmt === 'pdf') blob = await U.makePDF(rep, prog);

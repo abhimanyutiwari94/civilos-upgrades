@@ -34,14 +34,12 @@
     const show = h('input', { type: 'checkbox', checked: b.show });
     show.addEventListener('change', () => { b.show = show.checked; save(); });
     page.append(h('div.card',
-      h('h2', 'Report details (optional)'),
-      h('p.small.muted', 'Leave these empty for a fully plain report with no names or logo. They are printed only when “Print my company name and logo” is on.'),
-      h('label.switch', h('span', 'Print my company name and logo'), show),
-      txt('company', 'Company / organisation name'),
-      h('div.field', h('div.lbl', 'Logo'), logoBox),
-      txt('reportTitle', 'Report title', 'School Infrastructure Survey Report'),
-      txt('projectName', 'Project name'),
-      txt('preparedFor', 'Prepared for (client)'),
+      h('h2', 'Report details'),
+      h('div.row', { style: { gap: '12px', margin: '4px 0 10px' } }, h('img', { src: U.LOGO_PNG || 'icons/sakshham-logo.png', alt: 'Sakshham Consultants', style: { height: '40px', maxWidth: '60%' } })),
+      h('p.small.muted', 'Every report and export always carries the Sakshham Consultants logo, colours and page format. The details below are printed in the report heading.'),
+      txt('reportTitle', 'Report title', 'School Site Visit Report'),
+      txt('projectName', 'Project', 'CSR School Renovation'),
+      txt('preparedFor', 'Client'),
       h('div.grid2', txt('writer', 'Report writer name'), txt('designation', 'Designation')),
       h('div.grid2', txt('phone', 'Phone'), txt('email', 'Email')),
       txt('footerNote', 'Footer note (every page)', 'e.g. Draft for internal use')));

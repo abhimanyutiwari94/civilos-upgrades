@@ -63,9 +63,10 @@
   };
   const n2 = (v) => (Math.round(v * 100) / 100).toString();
 
-  const PW = 595.28, PH = 841.89, M = 40, TOP = 52, BOT = 46, CW = PW - 2 * M;
+  const PW = 595.28, PH = 841.89, M = 34, TOP = 84, BOT = 40, CW = PW - 2 * M;
 
   U.makePDF = async (rep, progress) => {
+    const TH = U.THEME;
     const pages = [];
     const images = []; // {name, bytes, w, h, gray?}
     let page = null, y = 0;
@@ -87,7 +88,7 @@
     async function textLine(s, x, yy, size, bold, color, bg) {
       if (!s) return;
       if (isWin(s)) {
-        op(`BT /${bold ? 'F2' : 'F1'} ${n2(size)} Tf ${rgb(color || [20, 20, 20])} rg ${n2(x)} ${n2(PH - yy)} Td (${esc(s)}) Tj ET`);
+        op(`BT /${bold === 'i' ? 'F3' : bold ? 'F2' : 'F1'} ${n2(size)} Tf ${rgb(color || [20, 20, 20])} rg ${n2(x)} ${n2(PH - yy)} Td (${esc(s)}) Tj ET`);
         return;
       }
       const key = [s, size, bold, (bg || []).join()].join('|');
@@ -137,35 +138,38 @@
       const prep = (cells, bold) => cells.map((c, i) => wrap(c == null ? '' : String(c), fs, bold, ws[i] - pad * 2));
       const headL = prep(head, true);
       const headH = Math.max(...headL.map((l) => l.length)) * lh + pad * 2;
-      const drawRow = async (lines, hgt, bold, fill) => {
+      const drawRow = async (lines, hgt, bold, fill, head, raw) => {
         let x = M;
         for (let i = 0; i < ws.length; i++) {
-          rect(x, y, ws[i], hgt, fill, [160, 160, 160], 0.4);
+          const cf = !head && opt.cond === i && raw ? U.condRGB(raw[i]) : null;
+          const f = cf || fill;
+          rect(x, y, ws[i], hgt, f, TH.line, 0.5);
           let ty = y + pad + fs * 0.92;
           const right = opt.numeric && i >= 2;
           for (const l of lines[i] || []) {
-            const tx = right ? x + ws[i] - pad - width(l, fs, bold) : x + pad;
-            await textLine(l, tx, ty, fs, bold, [20, 20, 20], fill);
+            const tw = width(l, fs, bold);
+            const tx = head ? x + (ws[i] - tw) / 2 : right ? x + ws[i] - pad - tw : x + pad;
+            await textLine(l, tx, ty, fs, bold, head ? [255, 255, 255] : TH.ink, f);
             ty += lh;
           }
           x += ws[i];
         }
         y += hgt;
       };
-      const drawHead = async () => { await drawRow(headL, headH, true, [235, 235, 235]); };
+      const drawHead = async () => { await drawRow(headL, headH, true, TH.navy, true); };
       if (y + headH + lh * 2 + pad * 2 > PH - BOT) newPage();
       await drawHead();
-      const all = rows.map((r) => ({ lines: prep(r, false), bold: false }));
-      if (opt.total) all.push({ lines: prep(opt.total, true), bold: true, fill: [245, 245, 245] });
+      const all = rows.map((r) => ({ lines: prep(r, false), bold: false, raw: r }));
+      if (opt.total) all.push({ lines: prep(opt.total, true), bold: true, fill: TH.label });
       for (const r of all) {
         let lines = r.lines;
         for (;;) {
           const need = Math.max(...lines.map((l) => l.length)) * lh + pad * 2;
-          if (y + need <= PH - BOT) { await drawRow(lines, need, r.bold, r.fill); break; }
+          if (y + need <= PH - BOT) { await drawRow(lines, need, r.bold, r.fill, false, r.raw); break; }
           const fit = Math.floor((PH - BOT - y - pad * 2) / lh);
           if (fit >= 3 || need > PH - BOT - TOP - headH) {
             const n = Math.max(1, fit);
-            await drawRow(lines.map((l) => l.slice(0, n)), n * lh + pad * 2, r.bold, r.fill);
+            await drawRow(lines.map((l) => l.slice(0, n)), n * lh + pad * 2, r.bold, r.fill, false, r.raw);
             lines = lines.map((l) => l.slice(n));
             newPage(); await drawHead();
             if (lines.every((l) => !l.length)) break;
@@ -191,10 +195,11 @@
         ensure(hgt);
         let x = M;
         for (let i = 0; i < ws.length; i++) {
-          const fill = i % 2 === 0 ? [246, 246, 246] : null;
-          rect(x, y, ws[i], hgt, fill, [170, 170, 170], 0.4);
+          const isLab = i % 2 === 0;
+          const fill = isLab ? TH.label : (r[i] ? TH.value : [255, 255, 255]);
+          rect(x, y, ws[i], hgt, fill, TH.line, 0.5);
           let ty = y + pad + fs * 0.92;
-          for (const l of lines[i]) { await textLine(l, x + pad, ty, fs, i % 2 === 0, [20, 20, 20], fill || [255, 255, 255]); ty += lh; }
+          for (const l of lines[i]) { await textLine(l, x + pad, ty, fs, isLab, isLab ? TH.navy : TH.ink, fill); ty += lh; }
           x += ws[i];
         }
         y += hgt;
@@ -225,9 +230,9 @@
               drawImage(addImage(im.bytes, im.w, im.h), x + (cw - w) / 2, y + (boxH - hh) / 2, w, hh);
             }
           } catch (e) { /* missing photo — leave the grey box */ }
-          rect(x, y, cw, boxH, null, [190, 190, 190], 0.4);
+          rect(x, y, cw, boxH, null, TH.line, 0.5);
           let ty = y + boxH + 9;
-          for (const l of caps[k]) { await textLine(l, x, ty, 7.6, true, [20, 20, 20]); ty += 9.6; }
+          for (const l of caps[k]) { await textLine(l, x, ty, 7.6, true, TH.navy); ty += 9.6; }
           await textLine(wrap(U.photoSub(p), 6.6, false, cw)[0], x, ty, 6.6, false, [110, 110, 110]);
           photoDone++;
           if (progress) progress('Adding photos ' + photoDone + ' / ' + photoTotal, 0.1 + 0.8 * (photoDone / photoTotal));
@@ -242,37 +247,46 @@
     let logo = null;
     for (const b of rep.blocks) {
       if (b.t === 'cover') {
-        if (b.logo) {
-          try {
-            logo = await U.logoImages(b.logo);
-            const hh = 46, w = Math.min(160, (logo.w / logo.h) * hh);
-            drawImage(addImage(logo.jpg, logo.w, logo.h), M, y - 12, w, (w / logo.w) * logo.h);
-            if (b.company) await textLine(b.company, M + w + 12, y + 14, 13, true);
-            y += Math.max(hh, (w / logo.w) * logo.h) - 4;
-          } catch (e) { logo = null; }
-        } else if (b.company) { await textLine(b.company, M, y + 10, 13, true); y += 22; }
-        if (b.logo || b.company) { hline(M, PW - M, y + 2, [120, 120, 120], 0.8); y += 14; }
-        await para(b.title, 17, true, [20, 20, 20], 0, 2);
-        await para(b.school, 13, true, [60, 60, 60], 0, 6);
+        /* Project / Client / Document / Date strip, as on the company checklist */
+        const st = (rep.lh && rep.lh.strip) || [];
+        if (st.length) {
+          const cw4 = CW / st.length, fsH = 7, fsV = 8.6, pad = 4;
+          const vals = st.map((c) => wrap(c[1] || '', fsV, true, cw4 - pad * 2));
+          const hV = Math.max(...vals.map((l) => l.length)) * fsV * 1.25 + pad * 2;
+          for (let i = 0; i < st.length; i++) {
+            const x = M + i * cw4;
+            rect(x, y, cw4, 13, TH.label, TH.line, 0.5);
+            await textLine(st[i][0], x + (cw4 - width(st[i][0], fsH, true)) / 2, y + 9.2, fsH, true, TH.navy, TH.label);
+            rect(x, y + 13, cw4, hV, null, TH.line, 0.5);
+            let ty = y + 13 + pad + fsV * 0.92;
+            for (const l of vals[i]) { await textLine(l, x + (cw4 - width(l, fsV, true)) / 2, ty, fsV, true, TH.ink); ty += fsV * 1.25; }
+          }
+          y += 13 + hV + 12;
+        }
+        await para(b.school, 13, true, TH.navy, 0, 4);
         await kvTable(b.meta, [0.25, 0.75]);
-        y += 4;
+        y += 2;
       } else if (b.t === 'h1') {
-        ensure(60);
-        y += 6;
-        await para(b.text, 12.5, true, [20, 20, 20], 0, 0);
-        hline(M, PW - M, y + 1, [90, 90, 90], 0.7);
-        y += 9;
+        ensure(150); // keep the heading with what follows it
+        y += 4;
+        const t = String(b.text).toUpperCase();
+        const lines = wrap(t, 9.5, true, CW - 14);
+        const hh = lines.length * 12 + 7;
+        rect(M, y, CW, hh, TH.orange, null);
+        let ty = y + 13;
+        for (const l of lines) { await textLine(l, M + 7, ty, 9.5, true, [255, 255, 255], TH.orange); ty += 12; }
+        y += hh + 6;
       } else if (b.t === 'h2') {
-        ensure(b.keep ? 90 : 50);
+        ensure(b.keep ? 150 : 110);
         y += 3;
-        await para(b.text, 10, true, [30, 30, 30], 0, b.sub ? 0 : 3);
-        if (b.sub) await para(b.sub, 8, false, [100, 100, 100], 0, 4);
+        await para(b.text, 9.8, true, TH.navy, 0, b.sub ? 0 : 3);
+        if (b.sub) await para(b.sub, 8, false, TH.muted, 0, 4);
       } else if (b.t === 'p') {
         await para(b.text, 8.6, !!b.bold, b.muted ? [110, 110, 110] : [25, 25, 25], 0, 5);
       } else if (b.t === 'kv') {
         await kv(b.rows, b.cols);
       } else if (b.t === 'table') {
-        await table(b.head, b.widths, b.rows, { total: b.total, numeric: b.numeric });
+        await table(b.head, b.widths, b.rows, { total: b.total, numeric: b.numeric, cond: b.cond });
       } else if (b.t === 'photos') {
         await photos(b.items);
       } else if (b.t === 'pb') {
@@ -290,20 +304,28 @@
       }
     }
 
-    /* ---- header / footer on every page ---- */
+    /* ---- company letterhead and footer on every page ---- */
     const total = pages.length;
+    const lg = await U.companyLogo();
+    const logoName = addImage(lg.jpg, lg.w, lg.h);
+    const lw = 150, lhgt = (lg.h / lg.w) * lw;
+    const L = rep.lh || {};
     for (let i = 0; i < total; i++) {
       page = pages[i];
-      if (i > 0) {
-        await textLine(wrap(rep.header || '', 7.5, false, CW * 0.6)[0], M, 30, 7.5, false, [110, 110, 110]);
-        const t = wrap((rep.header === rep.school ? rep.title : rep.school) || '', 7.5, false, CW * 0.38)[0];
-        await textLine(t, PW - M - width(t, 7.5, false), 30, 7.5, false, [110, 110, 110]);
-        hline(M, PW - M, 35, [200, 200, 200], 0.4);
-      }
-      const left = [rep.footer, rep.credit].filter(Boolean).join('   ·   ');
-      if (left) await textLine(wrap(left, 7, false, CW * 0.7)[0], M, PH - 24, 7, false, [120, 120, 120]);
+      drawImage(logoName, M - 2, 20, lw, lhgt);
+      const t1 = wrap(L.title || rep.title || '', 8.6, true, CW - lw - 20)[0];
+      await textLine(t1, PW - M - width(t1, 8.6, true), 32, 8.6, true, TH.navy);
+      const t2 = wrap(L.sub || rep.school || '', 8, 'i', CW - lw - 20)[0];
+      await textLine(t2, PW - M - width(t2, 8, true), 45, 8, 'i', TH.orange);
+      const t3 = `Page ${i + 1} of ${total}`;
+      await textLine(t3, PW - M - width(t3, 6.5, false), 57, 6.5, false, TH.ink);
+      hline(M, PW - M, 64, TH.orange, 1.6);
+      hline(M, PW - M, PH - 32, TH.line, 0.5);
+      await textLine(L.footLeft || '', M, PH - 22, 6.5, false, TH.ink);
       const pn = `Page ${i + 1} of ${total}`;
-      await textLine(pn, PW - M - width(pn, 7.5, false), PH - 24, 7.5, false, [110, 110, 110]);
+      await textLine(pn, (PW - width(pn, 6.5, false)) / 2, PH - 22, 6.5, false, TH.ink);
+      const fr = wrap([L.footRight, rep.footer, rep.credit].filter(Boolean).join('  |  '), 6.5, false, CW * 0.42)[0];
+      await textLine(fr, PW - M - width(fr, 6.5, false), PH - 22, 6.5, false, TH.ink);
     }
 
     if (progress) progress('Making the PDF file…', 0.95);
@@ -318,7 +340,7 @@
     const push = (x) => { const b = typeof x === 'string' ? enc.encode(x) : x; parts.push(b); pos += b.length; };
     let next = 1;
     const id = () => next++;
-    const catalog = id(), pagesId = id(), f1 = id(), f2 = id();
+    const catalog = id(), pagesId = id(), f1 = id(), f2 = id(), f3 = id();
     const imgIds = images.map(() => id());
     const pageIds = pages.map(() => [id(), id()]);
     const obj = (n, body) => { offs[n] = pos; push(`${n} 0 obj\n`); if (typeof body === 'string') push(body); else body(); push('\nendobj\n'); };
@@ -328,6 +350,7 @@
     obj(pagesId, `<< /Type /Pages /Count ${pages.length} /Kids [${pageIds.map((p) => p[0] + ' 0 R').join(' ')}] >>`);
     obj(f1, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
     obj(f2, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+    obj(f3, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique /Encoding /WinAnsiEncoding >>');
     images.forEach((im, i) => {
       obj(imgIds[i], () => {
         push(`<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.bytes.length} >>\nstream\n`);
@@ -342,7 +365,7 @@
       const raw = enc.encode(pages[i].ops.join('\n'));
       let data = raw, filter = '';
       try { const z = await U.deflateZlib(raw); if (z && z.length < raw.length) { data = z; filter = ' /Filter /FlateDecode'; } } catch (e) { /* plain */ }
-      obj(pid, `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >> /XObject << ${xobj} >> >> /Contents ${cid} 0 R >>`);
+      obj(pid, `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R /F3 ${f3} 0 R >> /XObject << ${xobj} >> >> /Contents ${cid} 0 R >>`);
       obj(cid, () => { push(`<< /Length ${data.length}${filter} >>\nstream\n`); push(data); push('\nendstream'); });
     }
     const xref = pos;

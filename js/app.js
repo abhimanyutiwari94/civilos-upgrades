@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const U = self.U, S = U.S, h = U.h;
-  self.CU_VERSION = '1.2.0';
+  self.CU_VERSION = '1.3.0';
   let root = null;
   const scrolls = new Map();
   let curKey = '';
@@ -54,6 +54,9 @@
       'Preview the report before saving it (Report tab › Preview).',
       '“Download all photos” on the Photos tab, and “Download photos” / “Room report” in every room.',
       'The app now tells you when a new version is ready.'],
+    '1.3.0': ['Every report and export now carries the Sakshham Consultants logo, colours and page format (PDF, Word, Excel, room-wise).',
+      'Project / Client / Document / Date strip at the top, orange section bars, coloured condition cells.',
+      'Report title, project, client and report writer: Settings › Report details.'],
   };
   function showWhatsNew() {
     let seen = '';

@@ -8,10 +8,41 @@
   const col = (n) => { let s = ''; n++; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
 
   /* style ids (see styles below) */
-  const ST = { normal: 0, head: 1, cell: 2, title: 3, label: 4, num: 5, small: 6, totalLabel: 7, totalNum: 8, sub: 9 };
+  const ST = { normal: 0, head: 1, cell: 2, title: 3, label: 4, num: 5, small: 6, totalLabel: 7, totalNum: 8, sub: 9,
+    lhTitle: 10, lhSub: 11, lhLine: 12, value: 13, section: 14, stripHead: 15, stripVal: 16,
+    c_good: 17, c_repair: 18, c_replace: 19, c_notavail: 20, c_na: 21 };
+  /* condition cell style from its label */
+  const condStyle = (label) => {
+    const c = (S.template.conditions || []).find((x) => x.label === label);
+    if (!c) return ST.cell;
+    const k = { good: ST.c_good, repair: ST.c_repair, replace: ST.c_replace, notavail: ST.c_notavail, na: ST.c_na, rebuild: ST.c_replace }[c.id];
+    return k || { ok: ST.c_good, warn: ST.c_repair, bad: ST.c_replace, new: ST.c_notavail, mute: ST.c_na }[c.tone] || ST.cell;
+  };
+  const LHR = 4; // letterhead rows at the top of every sheet
 
   class Sheet {
     constructor(name) { this.name = name; this.rows = []; this.widths = []; this.heights = {}; this.merges = []; this.freeze = 0; this.pics = []; }
+    addLetterhead(lh, n, total, logoMedia) {
+      const last = Math.max(1, this.widths.length - 1);
+      const rows = [[], [], [], []];
+      for (let c = 1; c <= last; c++) { rows[0][c] = { v: '', s: ST.lhTitle }; rows[1][c] = { v: '', s: ST.lhSub }; rows[2][c] = { v: '', s: ST.lhLine }; }
+      rows[2][0] = { v: '', s: ST.lhLine };
+      rows[0][1] = { v: lh.title || '', s: ST.lhTitle };
+      rows[1][1] = { v: lh.sub || '', s: ST.lhSub };
+      rows[2][1] = { v: `Sheet ${n} of ${total}  |  ${this.name}`, s: ST.lhLine };
+      const shift = (ref) => ref.replace(/([A-Z]+)(\d+)/g, (_, c, r) => c + (Number(r) + LHR));
+      this.merges = this.merges.map(shift);
+      if (last > 1) for (let r = 0; r < 3; r++) this.merges.unshift(`${col(1)}${r + 1}:${col(last)}${r + 1}`);
+      const hs = {};
+      for (const k in this.heights) hs[Number(k) + LHR] = this.heights[k];
+      hs[0] = 20; hs[1] = 18; hs[2] = 16; hs[3] = 8;
+      this.heights = hs;
+      this.rows = rows.concat(this.rows);
+      this.freeze = this.freeze ? this.freeze + LHR : 0;
+      this.pics.forEach((p) => { p.row += LHR; });
+      this.pics.unshift({ media: logoMedia, col: 0, row: 0, w: 190, h: 40 });
+      if ((this.widths[0] || 8) < 30 && this.widths.length > 1) { /* logo spans the first columns — fine */ }
+    }
     set(r, c, v, style) { (this.rows[r] = this.rows[r] || [])[c] = { v, s: style }; }
     rowValues(r, vals, style) { vals.forEach((v, c) => this.set(r, c, v, Array.isArray(style) ? style[c] : style)); }
     xml() {
@@ -56,33 +87,33 @@
     /* 1. Summary */
     const sm = new Sheet('Summary');
     sheets.push(sm);
-    sm.widths = [34, 70];
+    sm.widths = [30, 34, 30, 34];
     let r = 0;
     const cover = rep.blocks.find((x) => x.t === 'cover');
-    if (cover.logo) {
-      try {
-        const lg = await U.logoImages(cover.logo);
-        const hpx = 60, wpx = Math.round((lg.w / lg.h) * hpx);
-        media.push({ name: 'logo.png', bytes: lg.png });
-        sm.pics.push({ media: media.length, col: 0, row: 0, w: wpx, h: hpx });
-        sm.heights[0] = 50;
-        if (cover.company) sm.set(0, 1, cover.company, ST.title);
-        r = 2;
-      } catch (e) { r = 0; }
-    } else if (cover.company) { sm.set(0, 0, cover.company, ST.title); r = 2; }
-    sm.set(r++, 0, cover.title, ST.title);
-    sm.set(r++, 0, cover.school, ST.sub);
-    r++;
-    for (const [k, v] of cover.meta) { sm.rowValues(r++, [k, v], [ST.label, ST.cell]); }
+    const strip = (rep.lh && rep.lh.strip) || [];
+    strip.forEach((c, i) => { sm.set(0, i, c[0], ST.stripHead); sm.set(1, i, c[1] || '', ST.stripVal); });
+    sm.heights[1] = 30;
+    r = 3;
+    sm.set(r, 0, cover.school, ST.sub); sm.merges.push(`A${r + 1}:D${r + 1}`); r += 2;
+    const pairs = (list) => {
+      for (let i = 0; i < list.length; i += 2) {
+        const a1 = list[i], a2 = list[i + 1];
+        /* only real number boxes become numbers — codes like UDISE keep their leading zeros */
+        const val = (v, isNum) => { const n = U.num(v); return isNum && n != null && /^-?[\d.]+$/.test(String(v)) && String(v).length < 12 ? n : v; };
+        sm.rowValues(r, [a1[0], val(a1[1], a1[2]), a2 ? a2[0] : '', a2 ? val(a2[1], a2[2]) : ''], [ST.label, a1[1] ? ST.value : ST.cell, ST.label, a2 && a2[1] ? ST.value : ST.cell]);
+        r++;
+      }
+    };
+    pairs(cover.meta);
     r++;
     for (const sec of T.school) {
-      const rows = sec.fields.map((fl) => [fl.label, U.fieldText(fl, school.data)]).filter((x) => o.includeBlank || x[1]);
+      const rows = sec.fields.map((fl) => [fl.label, U.fieldText(fl, school.data), fl.type === 'number' || fl.type === 'calc']).filter((x) => o.includeBlank || x[1]);
       if (!rows.length) continue;
-      sm.set(r++, 0, sec.title, ST.sub);
-      for (const [k, v] of rows) {
-        const n = U.num(v);
-        sm.rowValues(r++, [k, n != null && /^-?[\d.]+$/.test(String(v)) && String(v).length < 12 ? n : v], [ST.label, n != null ? ST.num : ST.cell]);
-      }
+      for (let c = 0; c < 4; c++) sm.set(r, c, c ? '' : sec.title.toUpperCase(), ST.section);
+      sm.merges.push(`A${r + 1}:D${r + 1}`);
+      sm.heights[r] = 20;
+      r++;
+      pairs(rows);
       r++;
     }
 
@@ -92,7 +123,7 @@
     wk.widths = [26, 8, 36, 18, 22, 50];
     wk.rowValues(0, ['Location', 'No.', 'Item', 'Condition', 'Count / Size', 'Notes'], ST.head);
     wk.freeze = 1;
-    rep.work.forEach((w, i) => wk.rowValues(i + 1, w, ST.cell));
+    rep.work.forEach((w, i) => wk.rowValues(i + 1, w, [ST.cell, ST.cell, ST.cell, condStyle(w[3]), ST.cell, ST.cell]));
 
     /* 3. School checklist */
     const ck = new Sheet('School checklist');
@@ -106,7 +137,7 @@
     for (const sec of T.checklist) for (const it of sec.items) {
       const v = school.checks[it.id] || {};
       if (!o.includeBlank && !v.c && !v.q && !v.n && !refs('item:' + it.id)) continue;
-      ck.rowValues(r++, [sec.title, it.no, it.what, it.how, U.condLabel(v.c), v.q || '', v.n || '', refs('item:' + it.id)], ST.cell);
+      ck.rowValues(r++, [sec.title, it.no, it.what, it.how, U.condLabel(v.c), v.q || '', v.n || '', refs('item:' + it.id)], [ST.cell, ST.cell, ST.cell, ST.cell, condStyle(U.condLabel(v.c)), ST.cell, ST.cell, ST.cell]);
     }
 
     /* 4. Rooms & spaces (all fields as columns, totals at the bottom) */
@@ -152,7 +183,7 @@
         const v = (s.checks && s.checks[it.id]) || {};
         const key = `si:${s.id}:${it.id}`;
         if (!o.includeBlank && !v.c && !v.q && !v.n && !refs(key)) continue;
-        rc.rowValues(r++, [U.spaceTitle(s), sec.title, it.no, it.what, U.condLabel(v.c), v.q || '', v.n || '', refs(key)], ST.cell);
+        rc.rowValues(r++, [U.spaceTitle(s), sec.title, it.no, it.what, U.condLabel(v.c), v.q || '', v.n || '', refs(key)], [ST.cell, ST.cell, ST.cell, ST.cell, condStyle(U.condLabel(v.c)), ST.cell, ST.cell, ST.cell]);
       }
     }
 
@@ -197,21 +228,33 @@
     const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <numFmts count="1"><numFmt numFmtId="164" formatCode="0.##"/></numFmts>
-<fonts count="5"><font><sz val="10"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="10"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="15"/><name val="Arial"/><family val="2"/></font><font><sz val="9"/><color rgb="FF6E6E6E"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="12"/><name val="Arial"/><family val="2"/></font></fonts>
-<fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEBEBEB"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF6F6F6"/><bgColor indexed="64"/></patternFill></fill></fills>
-<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFA0A0A0"/></left><right style="thin"><color rgb="FFA0A0A0"/></right><top style="thin"><color rgb="FFA0A0A0"/></top><bottom style="thin"><color rgb="FFA0A0A0"/></bottom><diagonal/></border></borders>
+<fonts count="9"><font><sz val="10"/><color rgb="FF333333"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="15"/><color rgb="FF214366"/><name val="Arial"/><family val="2"/></font><font><sz val="9"/><color rgb="FF6E6E6E"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="12"/><color rgb="FF214366"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="10"/><color rgb="FF214366"/><name val="Arial"/><family val="2"/></font><font><b/><i/><sz val="10"/><color rgb="FFF28120"/><name val="Arial"/><family val="2"/></font><font><sz val="8"/><color rgb="FF333333"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="10"/><color rgb="FF333333"/><name val="Arial"/><family val="2"/></font></fonts>
+<fills count="12"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF214366"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD6E4F0"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF9C4"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF28120"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE2EFDA"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFE699"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF8CBAD"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9D2E9"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE7E6E6"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFBFBFBF"/></left><right style="thin"><color rgb="FFBFBFBF"/></right><top style="thin"><color rgb="FFBFBFBF"/></top><bottom style="thin"><color rgb="FFBFBFBF"/></bottom><diagonal/></border><border><left/><right/><top/><bottom style="medium"><color rgb="FFF28120"/></bottom><diagonal/></border></borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="10">
+<cellXfs count="22">
 <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
-<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
 <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
 <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>
-<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="5" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
 <xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>
 <xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>
-<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
-<xf numFmtId="164" fontId="1" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right"/></xf>
+<xf numFmtId="0" fontId="5" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="164" fontId="5" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right"/></xf>
 <xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="0" fontId="5" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="right" vertical="bottom"/></xf>
+<xf numFmtId="0" fontId="6" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="0" borderId="2" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>
+<xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="1" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="5" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="8" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="0" fillId="6" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="0" fillId="7" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="0" fillId="8" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="0" fillId="9" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="0" fillId="10" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top" wrapText="1"/></xf>
 </cellXfs>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>`;
@@ -219,6 +262,10 @@
     const wbSheets = [];
     const wbRels = [];
     let drawN = 0;
+    const lg = await U.companyLogo();
+    media.push({ name: 'company-logo.png', bytes: lg.png });
+    const logoMedia = media.length;
+    sheets.forEach((sh, i) => sh.addLetterhead(rep.lh || {}, i + 1, sheets.length, logoMedia));
     for (let i = 0; i < sheets.length; i++) {
       const sh = sheets[i];
       const n = i + 1;

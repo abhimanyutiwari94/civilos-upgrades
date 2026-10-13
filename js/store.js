@@ -19,8 +19,8 @@
       show: false,
       company: '',
       logo: null, // data URL
-      reportTitle: 'School Infrastructure Survey Report',
-      projectName: '',
+      reportTitle: 'School Site Visit Report',
+      projectName: 'CSR School Renovation',
       preparedFor: '',
       writer: '',
       designation: '',
@@ -64,6 +64,9 @@
 
   U.loadAll = async () => {
     S.settings = merge(U.defaultSettings(), await U.DB.kvGet('settings'));
+    /* older installs: move to the company report heading */
+    if (S.settings.brand.reportTitle === 'School Infrastructure Survey Report') S.settings.brand.reportTitle = 'School Site Visit Report';
+    if (!S.settings.brand.projectName) S.settings.brand.projectName = 'CSR School Renovation';
     S.template = (await U.DB.kvGet('template')) || self.CU_DEFAULT_TEMPLATE();
     await U.refreshSchools();
   };

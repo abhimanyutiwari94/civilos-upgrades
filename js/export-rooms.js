@@ -47,17 +47,14 @@
 
   U.buildRoomReport = (s, photos, keys, o) => {
     const b = S.settings.brand;
-    const brand = o.brand && (b.company || b.logo);
     const meta = [];
     const place = U.schoolPlace(s);
     if (place) meta.push(['Location', place]);
     if (s.data.sd_date) meta.push(['Date of visit', U.fmtDate(s.data.sd_date)]);
-    if (o.brand && b.projectName) meta.push(['Project', b.projectName]);
-    if (o.brand && b.preparedFor) meta.push(['Prepared for', b.preparedFor]);
-    if (o.brand && b.writer) meta.push(['Report by', [b.writer, b.designation].filter(Boolean).join(', ')]);
+    if (b.writer || s.data.sd_engineer) meta.push(['Report by', [b.writer || s.data.sd_engineer, b.designation].filter(Boolean).join(', ')]);
     meta.push(['Report date', U.fmtDate(Date.now())]);
     if (keys.length === 1) meta.unshift(['Room / space', groupName(s, keys[0])]);
-    const blocks = [{ t: 'cover', title: 'Room-wise photos and remarks', school: U.schoolName(s), meta, company: brand ? b.company : '', logo: brand ? b.logo : null }];
+    const blocks = [{ t: 'cover', title: 'Room-wise Photos and Remarks', school: U.schoolName(s), meta }];
     keys.forEach((key, i) => {
       if (i > 0) blocks.push({ t: 'pb' });
       const ph = photosOfGroup(photos, key);
@@ -75,7 +72,7 @@
       }
       if (o.remarks) {
         const rows = remarks(s, key, ph, key === 'school');
-        if (rows.length) blocks.push({ t: 'table', head: ['No.', 'Item', 'Condition', 'Count / Size', 'Remarks', 'Photos'], widths: [0.07, 0.25, 0.14, 0.14, 0.28, 0.12], rows });
+        if (rows.length) blocks.push({ t: 'table', head: ['No.', 'Item', 'Condition', 'Count / Size', 'Remarks', 'Photos'], widths: [0.07, 0.25, 0.14, 0.14, 0.28, 0.12], rows, cond: 2 });
         const sp = s.spaces.find((x) => x.id === key);
         if (sp && sp.notes) blocks.push({ t: 'p', text: 'Remarks: ' + sp.notes });
       }
@@ -83,8 +80,8 @@
       else blocks.push({ t: 'p', text: 'No photos.', muted: true });
     });
     return {
-      blocks, title: 'Room-wise photos and remarks', school: U.schoolName(s),
-      header: brand ? b.company : U.schoolName(s), footer: o.brand && b.footerNote ? b.footerNote : '',
+      blocks, title: 'Room-wise Photos and Remarks', school: U.schoolName(s), lh: U.letterhead(s, o, 'Room-wise Photos and Remarks'),
+      header: U.schoolName(s), footer: b.footerNote || '',
       credit: o.appCredit ? 'Prepared with CivilOS Upgrades' : '', perRow: o.perRow || 2, photoSize: o.photoSize || 1400, work: [],
     };
   };
@@ -168,11 +165,11 @@
       const photos = U.reportablePhotos(s, await U.loadPhotos(s));
       if (o.what === 'photos') return U.makePhotosZip(s, photos, keys, o, prog);
       const writer = o.fmt === 'docx' ? U.makeDOCX : U.makePDF;
-      if (!o.separate || keys.length === 1) return writer(U.buildRoomReport(s, photos, keys, o), prog);
+      if (!o.separate || keys.length === 1) return writer(U.buildRoomReport(s, photos, keys, Object.assign({}, o, { docName: base })), prog);
       const z = new U.ZipWriter();
       for (let i = 0; i < keys.length; i++) {
         prog(`Room ${i + 1} of ${keys.length}: ${groupName(s, keys[i])}`, i / keys.length);
-        const blob = await writer(U.buildRoomReport(s, photos, [keys[i]], o));
+        const blob = await writer(U.buildRoomReport(s, photos, [keys[i]], Object.assign({}, o, { docName: U.safeFileName(U.schoolName(s) + ' - ' + groupName(s, keys[i])) })));
         await z.add(`${U.pad(i + 1)} ${U.safeFileName(groupName(s, keys[i]))}${U.FILETYPES[o.fmt].ext}`, blob, false);
       }
       return z.blob('application/zip');
