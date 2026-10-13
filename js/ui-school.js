@@ -365,7 +365,10 @@
     page.append(h('div.card',
       h('h2', 'Photos'), h('p.small.muted', { style: { margin: '-4px 0 10px' } }, 'Take 4–6: wide view, each wall, ceiling, floor and close-ups of damage.'),
       h('button.btn.primary.big.block', { onclick: () => U.takePhotos(s, 'space:' + sp.id, placeOf(''), '', () => strip.redraw()) }, U.icon('camera'), 'Take photos of this room'),
-      strip));
+      strip,
+      h('div.row', { style: { marginTop: '10px', gap: '8px' } },
+        h('button.btn.small.soft.grow', { onclick: () => U.downloadPhotos(s, [sp.id]) }, U.icon('download'), 'Download photos'),
+        h('button.btn.small.soft.grow', { onclick: () => U.roomReportNow(s, sp.id) }, U.icon('doc'), 'Room report'))));
 
     for (const sec of S.template.spaceFields) page.append(h('div.card', h('h3', sec.title), U.fieldsEl(sec.fields, sp.data, () => U.touch(s))));
 
@@ -415,7 +418,15 @@
   function tabPhotos(page, s) {
     const live = (S.photos || []).filter((p) => !p.deleted);
     const size = live.reduce((a, p) => a + (p.size || 0), 0);
-    page.append(h('div.small.muted', `${live.length} photos · about ${U.fmtBytes(size)}`));
+    page.append(h('div.card',
+      h('div.small.muted', `${live.length} photos · about ${U.fmtBytes(size)}`),
+      h('div.row.wrap', { style: { marginTop: '8px', gap: '8px' } },
+        h('button.btn.primary.grow', { onclick: () => U.downloadPhotos(s) }, U.icon('download'), 'Download all photos'),
+        h('button.btn.soft.grow', { onclick: () => {
+          U.go(`/s/${s.id}/report`, true);
+          setTimeout(() => { const c = document.getElementById('room-export'); if (c) c.scrollIntoView({ behavior: 'smooth' }); }, 400);
+        } }, U.icon('doc'), 'Room-wise report')),
+      h('p.small.muted', { style: { margin: '8px 0 0' } }, 'Photos come in a folder for each room, with a Remarks file in each folder.')));
     const group = (title, sub, target, place, caption) => {
       const g = h('div.card.photo-group', h('h4', title), sub ? h('div.small.muted', sub) : null, U.photoStrip(s, target, place, caption, null));
       return g;
@@ -467,8 +478,16 @@
       h('div.field', h('div.lbl', 'File type'), seg),
       h('div.field', h('label', 'File name'), fname),
       h('p.small.muted', U.canPickFolder() ? 'You will choose the folder and file name in the next step.' : 'The file is saved to your Downloads. You can also send it to WhatsApp, Drive or email with “Share”.'),
-      h('button.btn.primary.big.block', { onclick: () => U.makeReportFlow(s, fmt, fname.value, opt) }, U.icon('print'), 'Make report'),
-      h('div.small.muted.center', { style: { marginTop: '8px' } }, `${U.liveSpaces(s).length} rooms · ${live} photos · ${Math.round(U.progress(s) * 100)}% checked`)));
+      h('div.row', { style: { gap: '8px' } },
+        h('button.btn.soft.big.grow', { onclick: async () => {
+          await U.flushSave();
+          const rep = U.buildReport(s, U.reportablePhotos(s, await U.loadPhotos(s)), opt);
+          U.previewReport(rep, { title: fname.value, note: fmt === 'xlsx' ? 'Preview of the content. In Excel the same data comes in separate sheets (Summary, Work required, Checklist, Rooms, Photos).' : null, onSave: () => U.makeReportFlow(s, fmt, fname.value, opt) });
+        } }, U.icon('doc'), 'Preview'),
+        h('button.btn.primary.big.grow', { onclick: () => U.makeReportFlow(s, fmt, fname.value, opt) }, U.icon('print'), 'Save report')),
+      h('div.small.muted.center', { style: { marginTop: '8px' } }, `${U.liveSpaces(s).length} rooms · ${live} photos · ${Math.round(U.progress(s) * 100)}% checked`),
+      h('button.btn.ghost.block', { style: { marginTop: '6px', color: 'var(--saffron-deep)' }, onclick: () => { const c = document.getElementById('room-export'); if (c) c.scrollIntoView({ behavior: 'smooth' }); } },
+        U.icon('down'), 'Room-wise export / photos only')));
 
     page.append(h('div.card',
       h('h3', 'What to include'),

@@ -87,10 +87,15 @@
       setTimeout(() => autosize(ta), 0);
       wrap.appendChild(ta);
     } else if (t === 'choice' || t === 'yesno') {
-      const opts = t === 'yesno' ? ['Yes', 'No'] : fl.options || [];
+      if (t === 'choice' && !fl.options) fl.options = [];
+      const opts = t === 'yesno' ? ['Yes', 'No'] : fl.options;
       const cur = () => (t === 'yesno' ? (data[fl.id] === true ? 'Yes' : data[fl.id] === false ? 'No' : data[fl.id]) : data[fl.id]);
       const row = h('div.chips');
-      const draw = () => { U.clear(row); for (const o of opts) row.appendChild(h('button.chip' + (cur() === o ? '.on' : ''), { type: 'button', onclick: () => { set(cur() === o ? null : (t === 'yesno' ? o === 'Yes' : o)); draw(); } }, o)); };
+      const draw = () => {
+        U.clear(row);
+        for (const o of opts) row.appendChild(h('button.chip' + (cur() === o ? '.on' : ''), { type: 'button', onclick: () => { set(cur() === o ? null : (t === 'yesno' ? o === 'Yes' : o)); draw(); } }, o));
+        if (t === 'choice') row.appendChild(U.addChoiceChip(fl, (v) => { set(v); draw(); }));
+      };
       draw();
       wrap.appendChild(row);
     } else if (t === 'multi') {
@@ -106,6 +111,11 @@
             set(c); draw();
           } }, o));
         }
+        row.appendChild(U.addChoiceChip(fl, (v) => {
+          const c = Array.isArray(data[fl.id]) ? data[fl.id].slice() : [];
+          if (!c.includes(v)) c.push(v);
+          set(c); draw();
+        }));
       };
       draw();
       wrap.appendChild(row);
@@ -147,6 +157,18 @@
     }
     return wrap;
   };
+  /* '+ Add' chip: a new choice is added to the survey form for every school, then selected. */
+  U.addChoiceChip = (fl, pick) => h('button.chip.chip-add', { type: 'button', onclick: async () => {
+    const v = await U.promptText('Add to “' + fl.label + '”', '', { placeholder: 'e.g. ATT (anti-termite treatment)', help: 'It is added to this list for every school. Remove it later in Menu › Edit survey form.' });
+    const t = v && v.trim();
+    if (!t) return;
+    fl.options = fl.options || [];
+    const same = fl.options.find((o) => o.toLowerCase() === t.toLowerCase());
+    if (!same) { fl.options.push(t); await U.saveTemplate(); }
+    pick(same || t);
+    U.toast('Added: ' + (same || t));
+  } }, '+ Add');
+
   /* A group of fields; calc fields refresh when their inputs change. */
   U.fieldsEl = (fields, data, onChange, copied) => {
     const els = fields.map((fl) => U.fieldEl(fl, data, () => { els.forEach((e) => e._refresh && e._refresh()); onChange && onChange(); }, copied));

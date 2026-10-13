@@ -181,11 +181,20 @@
     await U.saveGenerated(kind, base, make);
   };
 
+  /* Photos only (JPG, a folder per room) — all rooms with photos, or the given ones */
+  U.downloadPhotos = (s, keys) => U.exportRooms(s, keys || U.exportGroups(s).filter((g) => g.photos > 0).map((g) => g.key),
+    Object.assign({}, S.settings.roomExport || {}, { what: 'photos', data: true, remarks: true }));
+  U.roomReportNow = (s, key) => U.exportRooms(s, [key], Object.assign({}, S.settings.roomExport || {}, {
+    what: 'report', separate: false, fmt: (S.settings.roomExport || {}).fmt || 'pdf', data: true, remarks: true,
+    brand: S.settings.brand.show && !!(S.settings.brand.company || S.settings.brand.logo),
+    perRow: S.settings.report.photosPerRow, photoSize: S.settings.report.photoSize, appCredit: S.settings.report.appCredit }));
+
   /* The card on the Report tab */
   U.roomExportCard = (s) => {
     const r = S.settings.report;
     const st = S.settings.roomExport = S.settings.roomExport || { what: 'report', fmt: 'pdf', separate: false, data: true, remarks: true };
     const groups = U.exportGroups(s);
+    const opts = () => Object.assign({}, st, { brand: S.settings.brand.show && !!(S.settings.brand.company || S.settings.brand.logo), perRow: r.photosPerRow, photoSize: r.photoSize, appCredit: r.appCredit });
     const chosen = new Set(groups.filter((g) => g.photos > 0 || g.key !== 'school').map((g) => g.key));
     const seg = (items, key, redraw) => {
       const el = h('div.seg');
@@ -212,7 +221,7 @@
       }
     };
     drawList();
-    return h('div.card',
+    return h('div.card#room-export',
       h('h3', 'Room-wise export'),
       h('p.small.muted', 'Photos with remarks and data of each room — all together, or a separate file for each room.'),
       whatRow, fmtRow, sepRow,
@@ -220,9 +229,17 @@
       sw('remarks', 'Include remarks (checklist notes and room remarks)'),
       h('div.lbl.small', { style: { margin: '12px 0 4px', fontWeight: 700 } }, 'Rooms'),
       list,
-      h('button.btn.primary.block', { style: { marginTop: '12px' }, onclick: () => {
-        const keys = groups.map((g) => g.key).filter((k) => chosen.has(k));
-        U.exportRooms(s, keys, Object.assign({}, st, { brand: S.settings.brand.show && !!(S.settings.brand.company || S.settings.brand.logo), perRow: r.photosPerRow, photoSize: r.photoSize, appCredit: r.appCredit }));
-      } }, U.icon('download'), 'Export'));
+      h('div.row', { style: { marginTop: '12px', gap: '8px' } },
+        h('button.btn.soft.grow', { onclick: async () => {
+          const keys = groups.map((g) => g.key).filter((k) => chosen.has(k));
+          if (!keys.length) { U.toast('Choose at least one room'); return; }
+          const o = opts();
+          const rep = U.buildRoomReport(s, U.reportablePhotos(s, await U.loadPhotos(s)), keys, o);
+          U.previewReport(rep, { title: 'Room-wise export', note: st.what === 'photos' ? 'Preview of the photos and remarks. The export gives the JPG files in a folder per room.' : null, onSave: () => U.exportRooms(s, keys, o) });
+        } }, U.icon('doc'), 'Preview'),
+        h('button.btn.primary.grow', { onclick: () => {
+          const keys = groups.map((g) => g.key).filter((k) => chosen.has(k));
+          U.exportRooms(s, keys, opts());
+        } }, U.icon('download'), 'Export')));
   };
 })();

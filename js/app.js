@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const U = self.U, S = U.S, h = U.h;
-  self.CU_VERSION = '1.1.0';
+  self.CU_VERSION = '1.2.0';
   let root = null;
   const scrolls = new Map();
   let curKey = '';
@@ -45,6 +45,26 @@
 
   U.start = () => render();
 
+  /* After an update: say so once, with what changed. */
+  const NEWS = {
+    '1.1.0': ['Sharper photos: the camera waits until the phone is steady; tap the picture to focus.',
+      'Room-wise export: photos with remarks and data of each room (Report tab, or Download photos).',
+      'New school starts filled from the previous school (not name, GPS, staff, students, photos).'],
+    '1.2.0': ['“+ Add” button in Work needed and every choice list — add your own items (e.g. ATT).',
+      'Preview the report before saving it (Report tab › Preview).',
+      '“Download all photos” on the Photos tab, and “Download photos” / “Room report” in every room.',
+      'The app now tells you when a new version is ready.'],
+  };
+  function showWhatsNew() {
+    let seen = '';
+    try { seen = localStorage.getItem('cu.version') || ''; localStorage.setItem('cu.version', self.CU_VERSION); } catch (e) { return; }
+    if (seen === self.CU_VERSION || U.Lock.isLocked() || !U.Lock.state().used) return;
+    const items = Object.keys(NEWS).filter((v) => (!seen || v > seen) && v <= self.CU_VERSION).flatMap((v) => NEWS[v]);
+    if (!items.length) return;
+    setTimeout(() => U.modal({ title: `Updated to version ${self.CU_VERSION}`, body: [h('p.muted', 'What is new:'), h('ul', items.map((t) => h('li', { style: { marginBottom: '6px' } }, t)))],
+      actions: [{ label: 'OK', kind: 'primary' }] }), 700);
+  }
+
   async function boot() {
     root = document.getElementById('app');
     try {
@@ -71,8 +91,22 @@
       if (document.visibilityState === 'visible') { await U.Lock.save(); if (U.Lock.isLocked() && !document.querySelector('.lock')) render(); }
     });
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-      navigator.serviceWorker.register('sw.js').catch(() => { /* offline cache not available here */ });
+      const hadController = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.register('sw.js').then((reg) => {
+        /* look for a newer version whenever the app comes back to the screen (if there is internet) */
+        const check = () => { if (navigator.onLine) reg.update().catch(() => {}); };
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+        setInterval(check, 30 * 60000);
+      }).catch(() => { /* offline cache not available here */ });
+      /* a new version took over: offer a one-tap refresh (all work is already saved) */
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController || document.querySelector('.update-bar')) return;
+        const bar = h('div.update-bar', U.icon('download'), h('div.grow', 'A new version of the app is ready. Your work is saved.'),
+          h('button.btn.primary.small', { onclick: async () => { await U.flushSave(); location.reload(); } }, 'Update now'));
+        document.body.appendChild(bar);
+      });
     }
+    showWhatsNew();
     if (U.Lock.state().used) U.askPersist();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
