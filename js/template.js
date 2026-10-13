@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — the default survey form.
+/* Infra Upgrades — the default survey form.
    Taken from the site-visit checklist (3 sheets) plus planning fields.
    Everything here can be changed in the app: Menu > Edit survey form.
    IDs are fixed so data stays matched when the same form is shared between phones. */
@@ -195,30 +195,48 @@
     ] },
   ];
 
-  /* Measurements and counts asked for every room / space. */
+  /* Measurements and counts asked in rooms / spaces.
+     groups = which kinds of space show the box: room, toilet, corridor, open, wall, water (none = all). */
+  const ROOMS = ['room'], ROOMLIKE = ['room', 'toilet', 'corridor'];
   const SPACE_FIELDS = [
     { id: 'sp_size', title: 'Size', fields: [
       f('sp_len', 'Length (m)', 'number'),
-      f('sp_bre', 'Breadth (m)', 'number'),
-      f('sp_ht', 'Height (m)', 'number'),
-      f('sp_area', 'Floor area (sq. m, auto)', 'calc', { calc: 'mul', of: ['sp_len', 'sp_bre'] }),
-      f('sp_wall', 'Wall area, gross (sq. m, auto)', 'calc', { calc: 'wall', of: ['sp_len', 'sp_bre', 'sp_ht'] }),
-      f('sp_seats', 'Students who can sit', 'number'),
+      f('sp_bre', 'Breadth (m)', 'number', { groups: ['room', 'toilet', 'corridor', 'open', 'water'] }),
+      f('sp_ht', 'Height (m)', 'number', { groups: ['room', 'toilet', 'corridor', 'wall'] }),
+      f('sp_area', 'Floor area (sq. m, auto)', 'calc', { calc: 'mul', of: ['sp_len', 'sp_bre'], groups: ['room', 'toilet', 'corridor', 'open', 'water'] }),
+      f('sp_wall', 'Wall area, gross (sq. m, auto)', 'calc', { calc: 'wall', of: ['sp_len', 'sp_bre', 'sp_ht'], groups: ['room', 'toilet'] }),
+      f('sp_wall1', 'Wall area, one face (sq. m, auto)', 'calc', { calc: 'mul', of: ['sp_len', 'sp_ht'], groups: ['wall'] }),
+      f('sp_seats', 'Students who can sit', 'number', { groups: ROOMS }),
     ] },
     { id: 'sp_counts', title: 'Counts', fields: [
-      f('sp_doors', 'Doors (nos.)', 'number'),
-      f('sp_windows', 'Windows (nos.)', 'number'),
-      f('sp_lights', 'Lights total (nos.)', 'number'),
-      f('sp_lightsok', 'Lights working (nos.)', 'number'),
-      f('sp_fans', 'Fans total (nos.)', 'number'),
-      f('sp_fansok', 'Fans working (nos.)', 'number'),
-      f('sp_sockets', 'Switch boards / sockets (nos.)', 'number'),
-      f('sp_benches', 'Benches / desks total (nos.)', 'number'),
-      f('sp_benchgood', 'Benches good (nos.)', 'number'),
-      f('sp_benchrep', 'Benches repairable (nos.)', 'number'),
-      f('sp_benchbad', 'Benches beyond repair (nos.)', 'number'),
-      f('sp_boards', 'Writing boards (nos.)', 'number'),
-      f('sp_almirah', 'Almirahs / cupboards (nos.)', 'number'),
+      f('sp_doors', 'Doors (nos.)', 'number', { groups: ['room', 'toilet'] }),
+      f('sp_windows', 'Windows (nos.)', 'number', { groups: ROOMLIKE }),
+      f('sp_lights', 'Lights total (nos.)', 'number', { groups: ['room', 'toilet', 'corridor', 'open'] }),
+      f('sp_lightsok', 'Lights working (nos.)', 'number', { groups: ['room', 'toilet', 'corridor', 'open'] }),
+      f('sp_fans', 'Fans total (nos.)', 'number', { groups: ['room', 'corridor'] }),
+      f('sp_fansok', 'Fans working (nos.)', 'number', { groups: ['room', 'corridor'] }),
+      f('sp_sockets', 'Switch boards / sockets (nos.)', 'number', { groups: ROOMS }),
+      f('sp_benches', 'Benches / desks total (nos.)', 'number', { groups: ROOMS }),
+      f('sp_benchgood', 'Benches good (nos.)', 'number', { groups: ROOMS }),
+      f('sp_benchrep', 'Benches repairable (nos.)', 'number', { groups: ROOMS }),
+      f('sp_benchbad', 'Benches beyond repair (nos.)', 'number', { groups: ROOMS }),
+      f('sp_boards', 'Writing boards (nos.)', 'number', { groups: ROOMS }),
+      f('sp_almirah', 'Almirahs / cupboards (nos.)', 'number', { groups: ROOMS }),
+    ] },
+    { id: 'sp_toilet', title: 'Toilet fittings', groups: ['toilet'], fields: [
+      f('sp_wc', 'WC seats total (nos.)', 'number'),
+      f('sp_wcok', 'WC seats working (nos.)', 'number'),
+      f('sp_uri', 'Urinals total (nos.)', 'number'),
+      f('sp_uriok', 'Urinals working (nos.)', 'number'),
+      f('sp_basin', 'Wash basins total (nos.)', 'number'),
+      f('sp_basinok', 'Wash basins working (nos.)', 'number'),
+      f('sp_taps', 'Taps (nos.)', 'number'),
+      f('sp_exhaust', 'Exhaust fans (nos.)', 'number'),
+    ] },
+    { id: 'sp_water', title: 'Taps and platform', groups: ['water'], fields: [
+      f('sp_wtaps', 'Taps total (nos.)', 'number'),
+      f('sp_wtapsok', 'Taps working (nos.)', 'number'),
+      f('sp_plat', 'Platform / trough length (m)', 'number'),
     ] },
     { id: 'sp_work', title: 'Work needed', fields: [
       f('sp_worktypes', 'Work needed here', 'multi', { options: ['Painting', 'Plaster repair', 'Waterproofing', 'Flooring', 'Wall tiles', 'Electrical', 'Plumbing', 'Doors / windows', 'Grills', 'Furniture', 'Writing board', 'False ceiling', 'Rebuild', 'No work'] }),
@@ -271,37 +289,168 @@
     ] },
   ];
 
-  /* Kinds of room / space. "checklist: true" shows the room checklist for that kind. */
+  const TOILET_CHECKLIST = [
+    { id: 'tk_1', title: '1. Toilet — building, fittings, water, drainage', items: [
+      it('tk_1_1', '1.1', 'Building and roof', "Is the roof present and are walls sound? If it is open-roofed or broken down, choose 'Needs rebuild'. Rebuilding needs written approval."),
+      it('tk_1_2', '1.2', 'Number of fittings', 'Count toilet seats (WC), urinals and wash basins: total and working.'),
+      it('tk_1_3', '1.3', 'Condition of fittings', 'Look for cracked pans, broken seats and missing flush tank or flush.'),
+      it('tk_1_4', '1.4', 'Water supply', 'Note water source, tank connection, pipes, taps, water pressure and leaks.'),
+      it('tk_1_5', '1.5', 'Drainage', 'Check the trap, blockage, floor slope, soak pit or septic tank and manhole cover.'),
+      it('tk_1_6', '1.6', 'Floor and wall tiles', 'Look for broken tiles and slippery floor. Wall tiles are to be fixed up to 3 ft height.'),
+      it('tk_1_7', '1.7', 'Urinals', 'Check partitions or trough, spacing and flushing.'),
+    ] },
+  ];
+
+  /* Kinds of room / space.
+     group = which room boxes it shows; checklist = 'room' (room checklist), 'toilet' (toilet checklist) or false. */
   const SPACE_TYPES = [
-    { id: 'classroom', label: 'Classroom', checklist: true },
-    { id: 'principal', label: 'Principal room', checklist: true },
-    { id: 'staff', label: 'Staff room', checklist: true },
-    { id: 'office', label: 'Office', checklist: true },
-    { id: 'store', label: 'Store room', checklist: true },
-    { id: 'computer', label: 'Computer room / Innovation lab', checklist: true },
-    { id: 'library', label: 'Library', checklist: true },
-    { id: 'lab', label: 'Science lab', checklist: true },
-    { id: 'hall', label: 'Hall', checklist: true },
-    { id: 'sports', label: 'Indoor sports room', checklist: true },
-    { id: 'kitchen', label: 'Kitchen / Mid-day meal', checklist: true },
-    { id: 'gallery', label: 'Corridor / Gallery', checklist: false },
-    { id: 'verandah', label: 'Verandah', checklist: false },
-    { id: 'stair', label: 'Staircase', checklist: false },
-    { id: 'terrace', label: 'Terrace / Roof', checklist: false },
-    { id: 'toiletb', label: 'Boys toilet', checklist: false },
-    { id: 'toiletg', label: 'Girls toilet', checklist: false },
-    { id: 'toilets', label: 'Staff toilet', checklist: false },
-    { id: 'toiletd', label: 'Toilet for disabled persons', checklist: false },
-    { id: 'handwash', label: 'Handwash area', checklist: false },
-    { id: 'water', label: 'Drinking water point', checklist: false },
-    { id: 'assembly', label: 'Assembly / Prayer area', checklist: false },
-    { id: 'play', label: 'Playground / Play area', checklist: false },
-    { id: 'garden', label: 'Garden / Green area', checklist: false },
-    { id: 'gate', label: 'Main gate / Entrance', checklist: false },
-    { id: 'boundary', label: 'Boundary wall', checklist: false },
-    { id: 'open', label: 'Open area / Parking', checklist: false },
-    { id: 'outside', label: 'Building outside (elevation)', checklist: false },
-    { id: 'other', label: 'Other', checklist: false },
+    { id: 'classroom', label: 'Classroom', group: 'room', checklist: 'room' },
+    { id: 'principal', label: 'Principal room', group: 'room', checklist: 'room' },
+    { id: 'staff', label: 'Staff room', group: 'room', checklist: 'room' },
+    { id: 'office', label: 'Office', group: 'room', checklist: 'room' },
+    { id: 'store', label: 'Store room', group: 'room', checklist: 'room' },
+    { id: 'computer', label: 'Computer room / Innovation lab', group: 'room', checklist: 'room' },
+    { id: 'library', label: 'Library', group: 'room', checklist: 'room' },
+    { id: 'lab', label: 'Science lab', group: 'room', checklist: 'room' },
+    { id: 'hall', label: 'Hall', group: 'room', checklist: 'room' },
+    { id: 'sports', label: 'Indoor sports room', group: 'room', checklist: 'room' },
+    { id: 'kitchen', label: 'Kitchen / Mid-day meal', group: 'room', checklist: 'room' },
+    { id: 'gallery', label: 'Corridor / Gallery', group: 'corridor', checklist: false },
+    { id: 'verandah', label: 'Verandah', group: 'corridor', checklist: false },
+    { id: 'stair', label: 'Staircase', group: 'corridor', checklist: false },
+    { id: 'terrace', label: 'Terrace / Roof', group: 'open', checklist: false },
+    { id: 'toiletb', label: 'Boys toilet', group: 'toilet', checklist: 'toilet' },
+    { id: 'toiletg', label: 'Girls toilet', group: 'toilet', checklist: 'toilet' },
+    { id: 'toilets', label: 'Staff toilet', group: 'toilet', checklist: 'toilet' },
+    { id: 'toiletd', label: 'Toilet for disabled persons', group: 'toilet', checklist: 'toilet' },
+    { id: 'handwash', label: 'Handwash area', group: 'water', checklist: false },
+    { id: 'water', label: 'Drinking water point', group: 'water', checklist: false },
+    { id: 'assembly', label: 'Assembly / Prayer area', group: 'open', checklist: false },
+    { id: 'play', label: 'Playground / Play area', group: 'open', checklist: false },
+    { id: 'garden', label: 'Garden / Green area', group: 'open', checklist: false },
+    { id: 'gate', label: 'Main gate / Entrance', group: 'wall', checklist: false },
+    { id: 'boundary', label: 'Boundary wall', group: 'wall', checklist: false },
+    { id: 'open', label: 'Open area / Parking', group: 'open', checklist: false },
+    { id: 'outside', label: 'Building outside (elevation)', group: 'wall', checklist: false },
+    { id: 'other', label: 'Other', group: 'room', checklist: false },
+  ];
+
+  /* Answer buttons that fit the question. Points not listed here use the condition buttons
+     (Good / Repair needed / Replace needed / Not available / Not applicable / Needs rebuild).
+     [choices, choices that mean work is needed]. An empty list = no buttons (only Count / Size and Notes). */
+  const SUFF = ['Sufficient', 'More needed', 'Not available'];
+  const ANSWERS = {
+    ck_a1: [['Yes', 'Small vehicles only', 'No'], []],
+    ck_a2: [['Both available', 'Electricity only', 'Water only', 'Not available'], []],
+    ck_1_4: [['Staircase', 'Ladder', 'No access — ladder needed'], ['No access — ladder needed']],
+    ck_2_4: [['Done', 'Not done'], []],
+    ck_3_1: [['Available', 'Not available'], ['Not available']],
+    ck_8_2: [SUFF, ['More needed', 'Not available']],
+    ck_9_2: [SUFF, ['More needed', 'Not available']],
+    ck_10_2: [SUFF, ['More needed', 'Not available']],
+    ck_11_1: [SUFF, ['More needed', 'Not available']],
+    ck_12_1: [['Handpump', 'Borewell', 'Municipal supply', 'Tank', 'Not available'], ['Not available']],
+    ck_12_3: [['Suitable', 'Not suitable'], ['Not suitable']],
+    ck_12_6: [['Available and earthed', 'Available, not earthed', 'Not available'], ['Available, not earthed', 'Not available']],
+    ck_13_4: [['Suitable place available', 'Not suitable'], []],
+    ck_14_1: [['Level entry', 'Steps — ramp needed'], ['Steps — ramp needed']],
+    ck_15_1: [['Brick', 'Block', 'Stone', 'Fence', 'Not available'], ['Not available']],
+    ck_15_5: [['Both sides', 'Inside only', 'Not required'], []],
+    ck_16_1: [['Available', 'Not available'], []],
+    rk_1_1: [['Sufficient', 'Not sufficient'], ['Not sufficient']],
+    rk_2_1: [SUFF, ['More needed', 'Not available']],
+    rk_2_3: [['Stable', 'Some loose', 'Not stable'], ['Some loose', 'Not stable']],
+    rk_2_4: [['Yes — repair and reuse', 'Partly', 'No — replace'], ['Yes — repair and reuse', 'Partly', 'No — replace']],
+    rk_3_1: [['Available', 'Not available'], ['Not available']],
+    rk_3_2: [[], []],
+    rk_3_3: [['Keep', 'Repair', 'Replace'], ['Repair', 'Replace']],
+    rk_4_1: [['Steel', 'Wood', 'Built-in shelf', 'Not available'], []],
+    rk_5_3: [['Concealed — good', 'Surface — good', 'Damaged — repair', 'Replace'], ['Damaged — repair', 'Replace']],
+    rk_6_1: [['Wood', 'Steel', 'Aluminium', 'Mixed'], []],
+    tk_1_2: [SUFF, ['More needed', 'Not available']],
+  };
+  const withAnswers = (sections) => sections.map((sec) => Object.assign({}, sec, { items: sec.items.map((x) => {
+    const a = ANSWERS[x.id];
+    if (!a) return x;
+    const ans = a[0].length && !a[0].includes('Not applicable') ? a[0].concat('Not applicable') : a[0].slice();
+    return Object.assign({}, x, { ans, work: a[1].slice() });
+  }) }));
+
+  /* Work quantities (optional, Settings › Work quantities). calc: how the quantity is worked out
+     area = Nos × L × B · wall = Nos × L × H · vol = Nos × L × B × H · len = Nos × L · nos = Nos */
+  const q = (id, name, unit, calc) => ({ id, name, unit, calc });
+  const QTY_CATALOG = [
+    { id: 'qc_civil', name: 'Civil', items: [
+      q('qi_plrep', 'Plaster repair (hack and re-plaster)', 'sq.m', 'wall'),
+      q('qi_plnew', 'New cement plaster 12 mm', 'sq.m', 'wall'),
+      q('qi_pmm', 'Polymer modified mortar repair', 'sq.m', 'wall'),
+      q('qi_crack', 'Crack filling', 'm', 'len'),
+      q('qi_brick', 'Brick work (new / rebuild)', 'cu.m', 'vol'),
+      q('qi_pcc', 'PCC', 'cu.m', 'vol'),
+      q('qi_rcc', 'RCC', 'cu.m', 'vol'),
+      q('qi_dismantle', 'Dismantling', 'cu.m', 'vol'),
+      q('qi_att', 'Anti-termite treatment (ATT)', 'sq.m', 'area'),
+    ] },
+    { id: 'qc_paint', name: 'Painting', items: [
+      q('qi_pint', 'Interior wall painting (putty + primer + 2 coats)', 'sq.m', 'wall'),
+      q('qi_pceil', 'Ceiling painting', 'sq.m', 'area'),
+      q('qi_pext', 'Exterior painting (weather proof)', 'sq.m', 'wall'),
+      q('qi_enamel', 'Enamel paint on doors / windows / grills', 'sq.m', 'area'),
+      q('qi_pbound', 'Boundary wall painting', 'sq.m', 'wall'),
+    ] },
+    { id: 'qc_floor', name: 'Flooring and tiles', items: [
+      q('qi_floor', 'Flooring (tiles / kota)', 'sq.m', 'area'),
+      q('qi_dado', 'Wall tiles / dado', 'sq.m', 'wall'),
+      q('qi_skirt', 'Skirting', 'm', 'len'),
+      q('qi_paver', 'Paver blocks', 'sq.m', 'area'),
+    ] },
+    { id: 'qc_wp', name: 'Waterproofing', items: [
+      q('qi_wpterr', 'Terrace waterproofing', 'sq.m', 'area'),
+      q('qi_wptoilet', 'Toilet / wet area waterproofing', 'sq.m', 'area'),
+      q('qi_rwp', 'Rain water pipe', 'm', 'len'),
+    ] },
+    { id: 'qc_dw', name: 'Doors, windows and grills', items: [
+      q('qi_door', 'Door shutter (new / replace)', 'nos', 'nos'),
+      q('qi_window', 'Window shutter (new / replace)', 'nos', 'nos'),
+      q('qi_glass', 'Glass replacement', 'sq.m', 'area'),
+      q('qi_grill', 'MS grill', 'sq.m', 'area'),
+      q('qi_hw', 'Hardware (hinges, locks, handles)', 'nos', 'nos'),
+    ] },
+    { id: 'qc_elec', name: 'Electrical', items: [
+      q('qi_led', 'LED tube light', 'nos', 'nos'),
+      q('qi_fan', 'Ceiling fan', 'nos', 'nos'),
+      q('qi_exh', 'Exhaust fan', 'nos', 'nos'),
+      q('qi_sb', 'Switch board', 'nos', 'nos'),
+      q('qi_point', 'Wiring points', 'nos', 'nos'),
+      q('qi_wire', 'Wiring', 'm', 'len'),
+      q('qi_db', 'Distribution board with MCB / RCCB', 'nos', 'nos'),
+      q('qi_earth', 'Earthing pit', 'nos', 'nos'),
+    ] },
+    { id: 'qc_plumb', name: 'Plumbing and sanitary', items: [
+      q('qi_wc', 'WC (Indian / western)', 'nos', 'nos'),
+      q('qi_urinal', 'Urinal', 'nos', 'nos'),
+      q('qi_basin', 'Wash basin', 'nos', 'nos'),
+      q('qi_tap', 'Taps', 'nos', 'nos'),
+      q('qi_pipe', 'CPVC / UPVC pipe', 'm', 'len'),
+      q('qi_tank', 'Water tank', 'nos', 'nos'),
+      q('qi_ro', 'RO / water filter', 'nos', 'nos'),
+      q('qi_drain', 'Drain / soak pit repair', 'nos', 'nos'),
+    ] },
+    { id: 'qc_furn', name: 'Furniture and boards', items: [
+      q('qi_benchrep', 'Bench repair', 'nos', 'nos'),
+      q('qi_benchnew', 'New bench / desk', 'nos', 'nos'),
+      q('qi_board', 'Writing board', 'nos', 'nos'),
+      q('qi_almirah', 'Almirah', 'nos', 'nos'),
+    ] },
+    { id: 'qc_other', name: 'Other works', items: [
+      q('qi_ramp', 'Ramp', 'sq.m', 'area'),
+      q('qi_rail', 'Handrail', 'm', 'len'),
+      q('qi_flag', 'Flag pole', 'nos', 'nos'),
+      q('qi_nameboard', 'School name board', 'sq.m', 'area'),
+      q('qi_bwall', 'Boundary wall (new / rebuild)', 'm', 'len'),
+      q('qi_gate', 'Gate (new / repair)', 'nos', 'nos'),
+      q('qi_play', 'Play equipment', 'nos', 'nos'),
+    ] },
   ];
 
   const PHOTO_TAGS = ['Wide view', 'Close-up', 'Front wall', 'Back wall', 'Left wall', 'Right wall',
@@ -312,15 +461,19 @@
     'sd_boys', 'sd_girls', 'sd_totstu', 'sd_teachers', 'sd_buildings', 'sd_floors', 'sd_year', 'sd_rooms', 'sd_bua', 'sd_plot', 'sd_vehicle',
     'cl_records', 'cl_plan', 'cl_notes', 'cv_priority', 'cv_entry', 'cv_remarks', 'cv_overall', 'cv_status'];
 
+  self.CU_TEMPLATE_VERSION = 2;
   self.CU_DEFAULT_TEMPLATE = function () {
     return JSON.parse(JSON.stringify({
       v: 1,
+      tv: 2,
       name: 'School site visit — Civil, MEP and infrastructure',
       conditions: CONDITIONS,
       school: SCHOOL,
-      checklist: CHECKLIST,
+      checklist: withAnswers(CHECKLIST),
       spaceFields: SPACE_FIELDS,
-      roomChecklist: ROOM_CHECKLIST,
+      roomChecklist: withAnswers(ROOM_CHECKLIST),
+      toiletChecklist: withAnswers(TOILET_CHECKLIST),
+      qtyCatalog: QTY_CATALOG,
       spaceTypes: SPACE_TYPES,
       photoTags: PHOTO_TAGS,
     }));

@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — storage on the phone (IndexedDB).
+/* Infra Upgrades — storage on the phone (IndexedDB).
    Every write waits until the phone has really saved it ("strict" durability),
    so closing the app or a dead battery cannot lose what was already shown as saved. */
 (function () {

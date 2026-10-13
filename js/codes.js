@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — fingerprints of the 12 activation codes, in order.
+/* Infra Upgrades — fingerprints of the 12 activation codes, in order.
    Made by tools/gen-codes.mjs. The codes themselves are not in the app. */
 self.CU_CODE_FPS = [
  "d11e030e0373bc0425f0340f30bcde39a9474d0d9eb796fda567a23aa8fdd270",

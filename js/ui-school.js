@@ -1,8 +1,7 @@
-/* CivilOS Upgrades — Home (school list), school tabs, rooms, photos, report. */
+/* Infra Upgrades — Home (school list), school tabs, rooms, photos, report. */
 (function () {
   'use strict';
   const U = self.U, S = U.S, h = U.h;
-  const BADSET = new Set(['repair', 'replace', 'notavail', 'rebuild']);
 
   /* ================= HOME ================= */
   U.screens.home = async (root) => {
@@ -14,7 +13,7 @@
       { label: 'Restore from a backup file', sub: 'Bring schools from a .cupg file', run: () => U.restoreFlow() },
       { label: 'Help', sub: 'How to use, visit rules, condition guide', run: () => U.go('/help') },
     ]);
-    root.append(U.topbar({ logo: true, title: 'CivilOS Upgrades', sub: 'School survey · Civil, MEP & infrastructure', actions: [menu] }));
+    root.append(U.topbar({ logo: true, title: 'Infra Upgrades', sub: 'School survey · Civil, MEP & infrastructure', actions: [menu] }));
     const page = h('main.page');
     root.append(page);
 
@@ -131,10 +130,11 @@
       back: '/', title: U.schoolName(s), sub: U.schoolPlace(s) || 'Tap Details to fill the school details',
       actions: [h('button.icon-btn', { 'aria-label': 'General photos', onclick: () => U.takePhotos(s, 'school', U.placeName(s, U.schoolPlace(s) || U.schoolName(s)), 'General', () => U.rerender()) }, U.icon('camera')), menu],
     }));
-    root.append(h('nav.tabs', TABS.map((t) => h('button.tab' + (t.id === tab ? '.on' : ''), { onclick: () => U.go(`/s/${s.id}/${t.id}`, true) }, U.icon(t.icon), t.label))));
+    const tabs = U.isQtyOn() ? TABS.slice(0, 4).concat([{ id: 'qty', label: 'Quantities', icon: 'grid' }], TABS.slice(4)) : TABS;
+    root.append(h('nav.tabs', tabs.map((t) => h('button.tab' + (t.id === tab ? '.on' : ''), { onclick: () => U.go(`/s/${s.id}/${t.id}`, true) }, U.icon(t.icon), t.label))));
     const page = h('main.page');
     root.append(page);
-    await ({ info: tabInfo, check: tabCheck, rooms: tabRooms, photos: tabPhotos, report: tabReport }[tab] || tabInfo)(page, s);
+    await ({ info: tabInfo, check: tabCheck, rooms: tabRooms, photos: tabPhotos, report: tabReport, qty: U.isQtyOn() ? U.qtyTab : null }[tab] || tabInfo)(page, s);
   };
 
   U.useSchool = async (id) => {
@@ -169,17 +169,26 @@
       const r = Object.assign({}, rec(), patch);
       for (const k of Object.keys(r)) if (r[k] === '' || r[k] == null) delete r[k];
       if (Object.keys(r).length) store[it.id] = r; else delete store[it.id];
-      el.classList.toggle('done', !!(store[it.id] && store[it.id].c));
+      el.classList.toggle('done', U.isAnswered(it, store[it.id]));
       U.touch(s);
       onChange && onChange();
     };
     const how = h('div.item-how', it.how || '');
     how.hidden = true;
     const chips = h('div.chips');
+    /* answer buttons: the point's own choices (e.g. Yes / No), or the condition buttons */
+    const options = () => {
+      const list = Array.isArray(it.ans)
+        ? it.ans.map((a) => ({ id: a, label: a, tone: a === 'Not applicable' ? 'mute' : (it.work || []).includes(a) ? 'warn' : 'ok' }))
+        : S.template.conditions.slice();
+      const cur = rec().c;
+      if (cur && !list.some((o) => o.id === cur)) list.push({ id: cur, label: U.condLabel(cur), tone: 'mute', old: true }); // an earlier answer is never lost
+      return list;
+    };
     const drawChips = () => {
       U.clear(chips);
-      for (const c of S.template.conditions) {
-        chips.append(h(`button.chip.c-${c.tone || 'mute'}` + (rec().c === c.id ? '.on' : ''), { type: 'button', title: c.hint || '', onclick: () => { save({ c: rec().c === c.id ? null : c.id }); drawChips(); } }, c.label));
+      for (const c of options()) {
+        chips.append(h(`button.chip.c-${c.tone || 'mute'}` + (rec().c === c.id ? '.on' : ''), { type: 'button', title: c.hint || (c.old ? 'Earlier answer' : ''), onclick: () => { save({ c: rec().c === c.id ? null : c.id }); drawChips(); } }, c.label));
       }
     };
     drawChips();
@@ -190,7 +199,7 @@
     n.value = rec().n || '';
     n.addEventListener('input', () => { save({ n: n.value }); U.autosize(n); });
     setTimeout(() => U.autosize(n), 0);
-    const el = h('div.item' + (rec().c ? '.done' : ''),
+    const el = h('div.item' + (U.isAnswered(it, rec()) ? '.done' : ''),
       h('div.item-head', h('span.item-no', it.no || '•'), h('div.item-what', it.what),
         it.how ? h('button.icon-btn', { type: 'button', 'aria-label': 'How to check', style: { width: '36px', height: '36px', color: 'var(--saffron-deep)' }, onclick: () => { how.hidden = !how.hidden; } }, U.icon('info')) : null),
       how, chips,
@@ -204,15 +213,15 @@
     let filter = U.checkFilter || 'all';
     const all = U.T.allChecks();
     const prog = h('div.small.muted');
-    const updProg = () => { const d = all.filter((i) => s.checks[i.id] && s.checks[i.id].c).length; prog.textContent = `${d} of ${all.length} items checked`; };
+    const updProg = () => { const d = all.filter((i) => U.isAnswered(i, s.checks[i.id])).length; prog.textContent = `${d} of ${all.length} items checked`; };
     updProg();
     const fbar = h('div.chips', { style: { margin: '6px 0 12px' } });
     const list = h('div');
     const drawF = () => { U.clear(fbar); [['all', 'All'], ['todo', 'Not checked'], ['work', 'Needs work']].forEach(([k, l]) => fbar.append(h('button.chip' + (filter === k ? '.on' : ''), { onclick: () => { filter = U.checkFilter = k; drawF(); draw(); } }, l))); };
     const keep = (it) => {
       const r = s.checks[it.id];
-      if (filter === 'todo') return !(r && r.c);
-      if (filter === 'work') return !!(r && BADSET.has(r.c));
+      if (filter === 'todo') return !U.isAnswered(it, r);
+      if (filter === 'work') return !!(r && U.needsWork(it, r.c));
       return true;
     };
     const draw = () => {
@@ -220,8 +229,8 @@
       S.template.checklist.forEach((sec, k) => {
         const items = sec.items.filter(keep);
         if (!items.length) return;
-        const cnt = () => `${sec.items.filter((i) => s.checks[i.id] && s.checks[i.id].c).length}/${sec.items.length}`;
-        const full = () => sec.items.every((i) => s.checks[i.id] && s.checks[i.id].c);
+        const cnt = () => `${sec.items.filter((i) => U.isAnswered(i, s.checks[i.id])).length}/${sec.items.length}`;
+        const full = () => sec.items.every((i) => U.isAnswered(i, s.checks[i.id]));
         const acc = U.acc(sec.title, cnt(), full(), () => h('div', items.map((it) => U.checkItemEl(s, it, s.checks, 'item:' + it.id,
           () => U.placeName(s, `${it.no} ${it.what}`), () => { acc.setCount(cnt(), full()); updProg(); }))), filter !== 'all' || k === 0);
         list.append(acc);
@@ -245,8 +254,8 @@
       const wt = sp.data && Array.isArray(sp.data.sp_worktypes) ? sp.data.sp_worktypes : [];
       let checked = '';
       if (U.spaceUsesChecklist(sp)) {
-        const ri = U.T.allRoomChecks();
-        checked = `${ri.filter((i) => sp.checks && sp.checks[i.id] && sp.checks[i.id].c).length}/${ri.length} checked`;
+        const ri = U.checksOf(sp);
+        checked = `${ri.filter((i) => U.isAnswered(i, sp.checks && sp.checks[i.id])).length}/${ri.length} checked`;
       }
       list.append(h('div.row', { style: { alignItems: 'stretch', gap: '6px' } },
         h('button.list-card', { style: { flex: 1 }, onclick: () => U.go(`/s/${s.id}/room/${sp.id}`) },
@@ -370,16 +379,23 @@
         h('button.btn.small.soft.grow', { onclick: () => U.downloadPhotos(s, [sp.id]) }, U.icon('download'), 'Download photos'),
         h('button.btn.small.soft.grow', { onclick: () => U.roomReportNow(s, sp.id) }, U.icon('doc'), 'Room report'))));
 
-    for (const sec of S.template.spaceFields) page.append(h('div.card', h('h3', sec.title), U.fieldsEl(sec.fields, sp.data, () => U.touch(s))));
+    /* only the boxes that fit this kind of space (a toilet asks WC / urinals, an open area asks length × breadth …) */
+    for (const { sec, fields } of U.fieldSectionsFor(sp)) page.append(h('div.card', h('h3', sec.title), U.fieldsEl(fields, sp.data, () => U.touch(s))));
+
+    if (U.isQtyOn()) page.append(U.qtyCard(s, sp.id));
 
     const uses = U.spaceUsesChecklist(sp);
+    const kindNow = U.checklistKind(Object.assign({}, sp, { useChecklist: true }));
     const sw = h('input', { type: 'checkbox', checked: uses });
     sw.addEventListener('change', () => { sp.useChecklist = sw.checked; U.touch(s); U.rerender(); });
-    page.append(h('label.switch.card', { style: { padding: '12px 14px' } }, h('span', h('b', 'Room checklist'), h('div.small.muted', 'Walls, ceiling, floor, benches, boards, almirahs, lights, fans, doors, windows, painting')), sw));
+    page.append(h('label.switch.card', { style: { padding: '12px 14px' } },
+      kindNow === 'toilet'
+        ? h('span', h('b', 'Toilet checklist'), h('div.small.muted', 'Building and roof, fittings, water supply, drainage, floor and wall tiles, urinals'))
+        : h('span', h('b', 'Room checklist'), h('div.small.muted', 'Walls, ceiling, floor, benches, boards, almirahs, lights, fans, doors, windows, painting')), sw));
     if (uses) {
-      S.template.roomChecklist.forEach((sec) => {
-        const cnt = () => `${sec.items.filter((i) => sp.checks[i.id] && sp.checks[i.id].c).length}/${sec.items.length}`;
-        const full = () => sec.items.every((i) => sp.checks[i.id] && sp.checks[i.id].c);
+      U.checklistFor(sp).forEach((sec) => {
+        const cnt = () => `${sec.items.filter((i) => U.isAnswered(i, sp.checks[i.id])).length}/${sec.items.length}`;
+        const full = () => sec.items.every((i) => U.isAnswered(i, sp.checks[i.id]));
         const acc = U.acc(sec.title, cnt(), full(), () => h('div', sec.items.map((it) => U.checkItemEl(s, it, sp.checks, `si:${sp.id}:${it.id}`,
           () => placeOf(`${it.no} ${it.what}`), () => acc.setCount(cnt(), full())))), false);
         page.append(acc);
@@ -455,7 +471,7 @@
     const defName = U.safeFileName(`${U.schoolName(s)} - Survey Report - ${U.fmtDate(s.data.sd_date || Date.now())}`);
     const fname = h('input.inp'); fname.value = defName;
     const hasBrand = !!(b.company || b.logo);
-    const opt = { docName: '', brand: true, includeBlank: r.includeBlank, includeHow: r.includeHow, summary: r.summary, quantities: r.quantities, photos: true, signatures: r.signatures, appCredit: r.appCredit, perRow: r.photosPerRow, photoSize: r.photoSize };
+    const opt = { docName: '', brand: true, qty: r.qty !== false, includeBlank: r.includeBlank, includeHow: r.includeHow, summary: r.summary, quantities: r.quantities, photos: true, signatures: r.signatures, appCredit: r.appCredit, perRow: r.photosPerRow, photoSize: r.photoSize };
     const sw = (key, label, sub, disabled) => {
       const c = h('input', { type: 'checkbox', checked: !!opt[key], disabled: !!disabled });
       c.addEventListener('change', () => {
@@ -493,11 +509,12 @@
       h('h3', 'What to include'),
       h('p.small.muted', { style: { margin: '0 0 6px' } }, 'Sakshham Consultants logo, colours and page format are always printed.'),
       sw('summary', 'Summary of work required'),
-      sw('quantities', 'Rooms and quantities table', 'Sizes, areas and counts with totals'),
+      sw('quantities', 'Rooms and sizes table', 'Sizes, areas and counts with totals'),
+      U.isQtyOn() ? sw('qty', 'Work quantities', 'Abstract (totals) and measurement of every line') : null,
       sw('includeBlank', 'Show empty items too', 'Off = only items with an answer or photo (cleaner report)'),
       sw('includeHow', "Show 'How to check' text"),
       sw('signatures', 'Signature lines at the end'),
-      sw('appCredit', "Print 'Prepared with CivilOS Upgrades' in the footer", 'Off = no app name anywhere in the report'),
+      sw('appCredit', "Print 'Prepared with Infra Upgrades' in the footer", 'Off = no app name anywhere in the report'),
       h('div.field', { style: { marginTop: '10px' } }, h('div.lbl', 'Photos in the report'), perRow),
       h('div.field', h('div.lbl', 'Photo quality in the report'), qual),
       h('button.btn.soft.block', { onclick: () => U.go('/settings') }, U.icon('edit'), 'Report title, project, client and report writer')));
@@ -544,7 +561,7 @@
     const filename = (handle && handle.name) || name + t.ext;
     const actions = [];
     if (!handle) actions.push({ label: 'Save file', kind: 'primary', onClick: () => { U.downloadBlob(blob, filename); U.toast('Saved to Downloads: ' + filename, 4000); return false; } });
-    if (U.canShareFiles()) actions.push({ label: 'Share / Send', kind: handle ? 'primary' : '', onClick: async () => { await U.shareBlob(blob, filename, t.mime); return false; } });
+    actions.push(U.sendAction(blob, filename, t.mime, !!handle, handle ? 'primary' : ''));
     actions.push({ label: 'Close', kind: 'ghost' });
     U.modal({
       title: 'Report ready',

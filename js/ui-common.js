@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — shared screen parts: top bar, form fields, photo strips, photo viewer. */
+/* Infra Upgrades — shared screen parts: top bar, form fields, photo strips, photo viewer. */
 (function () {
   'use strict';
   const U = self.U, S = U.S, h = U.h;
@@ -93,8 +93,10 @@
       const row = h('div.chips');
       const draw = () => {
         U.clear(row);
-        for (const o of opts) row.appendChild(h('button.chip' + (cur() === o ? '.on' : ''), { type: 'button', onclick: () => { set(cur() === o ? null : (t === 'yesno' ? o === 'Yes' : o)); draw(); } }, o));
-        if (t === 'choice') row.appendChild(U.addChoiceChip(fl, (v) => { set(v); draw(); }));
+        const shown = opts.slice();
+        if (t === 'choice' && cur() && !shown.includes(cur())) shown.push(cur()); // a choice removed from the list stays visible while selected
+        for (const o of shown) row.appendChild(h('button.chip' + (cur() === o ? '.on' : ''), { type: 'button', onclick: () => { set(cur() === o ? null : (t === 'yesno' ? o === 'Yes' : o)); draw(); } }, o));
+        if (t === 'choice') { row.appendChild(U.addChoiceChip(fl, (v) => { set(v); draw(); })); row.appendChild(U.editChoicesChip(fl, draw)); }
       };
       draw();
       wrap.appendChild(row);
@@ -103,7 +105,8 @@
       const draw = () => {
         U.clear(row);
         const cur = Array.isArray(data[fl.id]) ? data[fl.id] : [];
-        for (const o of fl.options || []) {
+        const shown = (fl.options || []).concat(cur.filter((x) => !(fl.options || []).includes(x))); // removed choices stay visible while selected
+        for (const o of shown) {
           row.appendChild(h('button.chip' + (cur.includes(o) ? '.on' : ''), { type: 'button', onclick: () => {
             const c = Array.isArray(data[fl.id]) ? data[fl.id].slice() : [];
             const i = c.indexOf(o);
@@ -116,6 +119,7 @@
           if (!c.includes(v)) c.push(v);
           set(c); draw();
         }));
+        row.appendChild(U.editChoicesChip(fl, draw));
       };
       draw();
       wrap.appendChild(row);
@@ -124,11 +128,13 @@
       const show = () => { const v = data[fl.id]; out.textContent = v && v.lat != null ? `${U.fmtLatLng(v.lat, v.lng)}${v.acc ? `  (±${Math.round(v.acc)} m)` : ''}` : 'Not taken yet'; };
       show();
       const btn = h('button.btn.soft.small', { type: 'button', onclick: async () => {
-        btn.disabled = true; btn.textContent = 'Finding location…';
-        const f = await U.Geo.once(25000);
+        btn.disabled = true; btn.textContent = 'Finding accurate location…';
+        /* listen up to 20 s and keep the most accurate reading (stops early at ±10 m) */
+        const f = await U.Geo.once(20000, (b) => { btn.textContent = `Improving… ±${Math.round(b.acc)} m`; });
         btn.disabled = false; btn.textContent = 'Use my location now';
         if (!f) { U.toast('Location not found. Turn on GPS / location and try in open sky.'); return; }
         set({ lat: U.round(f.lat, 6), lng: U.round(f.lng, 6), acc: Math.round(f.acc) }); show();
+        if (f.acc > 50) U.toast(`Location is rough (±${Math.round(f.acc)} m). Stand in the open and tap again.`, 5000);
       } }, 'Use my location now');
       const edit = h('button.btn.ghost.small', { type: 'button', onclick: async () => {
         const v = data[fl.id];
@@ -168,6 +174,40 @@
     pick(same || t);
     U.toast('Added: ' + (same || t));
   } }, '+ Add');
+
+  /* 'Edit list' chip: rename, remove or move the choices of a box (for every school).
+     Answers already given are kept: a removed choice stays visible where it was selected. */
+  U.editChoicesChip = (fl, redraw) => h('button.chip.chip-add', { type: 'button', onclick: () => U.editChoices(fl, redraw) }, '✎ Edit list');
+  U.editChoices = (fl, redraw) => {
+    fl.options = fl.options || [];
+    const body = h('div');
+    const draw = () => {
+      U.clear(body);
+      fl.options.forEach((o, i) => body.append(h('div.ed-item', h('div.txt', o),
+        h('button.icon-btn', { type: 'button', 'aria-label': 'Rename', onclick: async () => {
+          const v = await U.promptText('Rename choice', o);
+          const t = v && v.trim();
+          if (!t || t === o) return;
+          if (fl.options.includes(t)) { U.toast('That choice is already in the list'); return; }
+          fl.options[i] = t; await U.saveTemplate(); draw();
+          U.toast('Renamed. Schools that already chose “' + o + '” keep that answer.');
+        } }, U.icon('edit')),
+        h('button.icon-btn', { type: 'button', 'aria-label': 'Move up', disabled: i === 0, onclick: async () => { [fl.options[i - 1], fl.options[i]] = [fl.options[i], fl.options[i - 1]]; await U.saveTemplate(); draw(); } }, U.icon('up')),
+        h('button.icon-btn', { type: 'button', 'aria-label': 'Remove', style: { color: 'var(--bad)' }, onclick: async () => {
+          if (!(await U.confirm(`Remove “${o}” from the list? Schools where it is already chosen keep it.`, { ok: 'Remove', danger: true }))) return;
+          fl.options.splice(i, 1); await U.saveTemplate(); draw();
+        } }, U.icon('trash')))));
+      body.append(h('button.btn.soft.small', { type: 'button', style: { marginTop: '10px' }, onclick: async () => {
+        const v = await U.promptText('Add a choice', '', { placeholder: 'e.g. ATT (anti-termite treatment)' });
+        const t = v && v.trim();
+        if (!t) return;
+        if (!fl.options.includes(t)) { fl.options.push(t); await U.saveTemplate(); }
+        draw();
+      } }, U.icon('plus'), 'Add a choice'));
+    };
+    draw();
+    U.modal({ title: fl.label, body: [h('p.small.muted', 'Changes apply to every school.'), body], onClose: () => redraw && redraw(), actions: [{ label: 'Done', kind: 'primary' }] });
+  };
 
   /* A group of fields; calc fields refresh when their inputs change. */
   U.fieldsEl = (fields, data, onChange, copied) => {

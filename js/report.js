@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — the report model shared by PDF, Word and Excel,
+/* Infra Upgrades — the report model shared by PDF, Word and Excel,
    plus photo/logo preparation and saving files to a folder. */
 (function () {
   'use strict';
@@ -30,7 +30,13 @@
   U.condRGB = (label) => {
     if (!label) return null;
     const c = (U.S.template.conditions || []).find((x) => x.label === label);
-    if (!c) return null;
+    if (!c) {
+      /* a point's own answers (Yes / More needed ...): work answers in the repair colour, others green */
+      const items = U.T.allChecks().concat(U.T.allSpaceChecks());
+      if (items.some((it) => (it.work || []).includes(label))) return COND_RGB.repair;
+      if (items.some((it) => (it.ans || []).includes(label))) return COND_RGB.good;
+      return null;
+    }
     return COND_RGB[c.id] || { ok: COND_RGB.good, warn: COND_RGB.repair, bad: COND_RGB.replace, new: COND_RGB.notavail, mute: COND_RGB.na }[c.tone] || null;
   };
   U.hex = (rgb) => rgb.map((v) => v.toString(16).padStart(2, '0')).join('').toUpperCase();
@@ -75,11 +81,11 @@
     const sp = s && (s.spaces || []).find((x) => x.id === a);
     if (kind === 'space') return sp ? U.spaceTitle(sp) : 'Room';
     if (kind === 'item') { const it = U.T.allChecks().find((x) => x.id === a); return it ? it.no + ' ' + it.what : 'Checklist'; }
-    if (kind === 'si') { const it = U.T.allRoomChecks().find((x) => x.id === b); return [sp ? U.spaceTitle(sp) : 'Room', it ? it.no + ' ' + it.what : ''].filter(Boolean).join(' · '); }
+    if (kind === 'si') { const it = U.T.allSpaceChecks().find((x) => x.id === b); return [sp ? U.spaceTitle(sp) : 'Room', it ? it.no + ' ' + it.what : ''].filter(Boolean).join(' · '); }
     return '';
   };
   U.photoCaption = (p, s) => [U.photoNo(p), p.caption || U.targetLabel(s, p.target), p.tag || ''].filter(Boolean).join(' · ');
-  U.photoSub = (p) => [p.lat != null ? U.fmtLatLng(p.lat, p.lng) : 'No GPS', U.fmtDateTime(p.ts)].join('  ·  ');
+  U.photoSub = (p) => [p.lat != null ? U.fmtLatLng(p.lat, p.lng) + (p.acc != null ? ` (±${Math.round(p.acc)} m)` : '') : 'No GPS', U.fmtDateTime(p.ts)].join('  ·  ');
 
   /* ---------- build the report as simple blocks ---------- */
   U.buildReport = (school, photos, o) => {
@@ -120,16 +126,16 @@
     const work = [];
     for (const sec of T.checklist) for (const it of sec.items) {
       const r = school.checks[it.id];
-      if (r && BAD.has(r.c)) work.push(['School', it.no, it.what, U.condLabel(r.c), r.q || '', r.n || '']);
+      if (r && U.needsWork(it, r.c)) work.push(['School', it.no, it.what, U.condLabel(r.c), r.q || '', r.n || '']);
     }
     const spaces = U.liveSpaces(school);
     for (const sp of spaces) {
       const where = U.spaceTitle(sp);
       const wt = sp.data && sp.data.sp_worktypes;
       if (Array.isArray(wt) && wt.length && !(wt.length === 1 && wt[0] === 'No work')) work.push([where, '', 'Work needed', wt.filter((x) => x !== 'No work').join(', '), '', '']);
-      if (U.spaceUsesChecklist(sp)) for (const sec of T.roomChecklist) for (const it of sec.items) {
+      for (const it of U.checksOf(sp)) {
         const r = sp.checks && sp.checks[it.id];
-        if (r && BAD.has(r.c)) work.push([where, it.no, it.what, U.condLabel(r.c), r.q || '', r.n || '']);
+        if (r && U.needsWork(it, r.c)) work.push([where, it.no, it.what, U.condLabel(r.c), r.q || '', r.n || '']);
       }
       if (sp.notes && /rebuild/i.test(sp.notes)) work.push([where, '', 'Note', 'See notes', '', sp.notes]);
     }
@@ -138,9 +144,9 @@
       const counts = {};
       const all = [];
       for (const it of U.T.allChecks()) { const r = school.checks[it.id]; if (r && r.c) all.push(r.c); }
-      for (const sp of spaces) if (U.spaceUsesChecklist(sp)) for (const it of U.T.allRoomChecks()) { const r = sp.checks && sp.checks[it.id]; if (r && r.c) all.push(r.c); }
+      for (const sp of spaces) for (const it of U.checksOf(sp)) { const r = sp.checks && sp.checks[it.id]; if (r && r.c) all.push(r.c); }
       all.forEach((c) => { counts[c] = (counts[c] || 0) + 1; });
-      const totalItems = U.T.allChecks().length + spaces.filter(U.spaceUsesChecklist).length * U.T.allRoomChecks().length;
+      const totalItems = U.T.allChecks().length + spaces.reduce((a, sp) => a + U.checksOf(sp).length, 0);
       blocks.push({ t: 'kv', rows: [
         ['Rooms and spaces surveyed', String(spaces.length)],
         ['Photos taken', String(photos.filter((p) => !p.deleted).length)],
@@ -175,6 +181,12 @@
       if (!used2.length) blocks.push({ t: 'p', text: 'No sizes or counts entered yet.', muted: true });
     }
 
+    /* work quantities (abstract + measurement) */
+    if (U.isQtyOn() && o.qty !== false) {
+      const qb = U.qtyBlocks(school, secNo + 1);
+      if (qb.length) { blocks.push(...qb); secNo += 2; }
+    }
+
     /* school checklist */
     H1('School checklist');
     for (const sec of T.checklist) {
@@ -203,11 +215,11 @@
         const head = `${secNo}.${k + 1}  ${U.spaceTitle(sp)}`;
         const sub = [U.T.type(sp.typeId).label, U.spaceWhere(sp)].filter(Boolean).join(' · ');
         blocks.push({ t: 'h2', text: head, sub, keep: true });
-        const rows = U.T.allSpaceFields().map((fl) => [fl.label, U.fieldText(fl, sp.data || {})]).filter((r) => o.includeBlank || r[1]);
+        const rows = U.fieldsOfSpace(sp).map((fl) => [fl.label, U.fieldText(fl, sp.data || {})]).filter((r) => o.includeBlank || r[1]);
         if (rows.length) blocks.push({ t: 'kv', rows, cols: 4 });
         if (U.spaceUsesChecklist(sp)) {
           const crow = [];
-          for (const sec of T.roomChecklist) for (const it of sec.items) {
+          for (const sec of U.checklistFor(sp)) for (const it of sec.items) {
             const r = (sp.checks && sp.checks[it.id]) || {};
             const key = `si:${sp.id}:${it.id}`;
             if (!o.includeBlank && !r.c && !r.q && !r.n && !groupOf(key).length) continue;
@@ -221,7 +233,7 @@
         if (sp.notes) blocks.push({ t: 'p', text: 'Notes: ' + sp.notes });
         if (o.photos) {
           const ph = [...takePhotos('space:' + sp.id)];
-          for (const it of U.T.allRoomChecks()) ph.push(...takePhotos(`si:${sp.id}:${it.id}`));
+          for (const it of U.T.allSpaceChecks()) ph.push(...takePhotos(`si:${sp.id}:${it.id}`));
           ph.sort((a, b2) => (a.no || 0) - (b2.no || 0));
           if (ph.length) blocks.push({ t: 'photos', items: ph });
         }
@@ -244,7 +256,7 @@
       school: name,
       header: name,
       footer: b.footerNote || '',
-      credit: o.appCredit ? 'Prepared with CivilOS Upgrades' : '',
+      credit: o.appCredit ? 'Prepared with Infra Upgrades' : '',
       perRow: o.perRow || 2,
       photoSize: o.photoSize || 1400,
       work,
@@ -278,7 +290,7 @@
     pdf: { mime: 'application/pdf', ext: '.pdf', desc: 'PDF document' },
     docx: { mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ext: '.docx', desc: 'Word document' },
     xlsx: { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ext: '.xlsx', desc: 'Excel workbook' },
-    backup: { mime: 'application/octet-stream', ext: '.cupg', desc: 'CivilOS Upgrades backup' },
+    backup: { mime: 'application/octet-stream', ext: '.cupg', desc: 'Infra Upgrades backup' },
     zip: { mime: 'application/zip', ext: '.zip', desc: 'ZIP folder' },
   };
   U.FILETYPES = TYPES;
@@ -313,6 +325,23 @@
     } catch (e) { if (e && e.name === 'AbortError') return true; }
     return false;
   };
+  /* Can this phone share this exact file? (Chrome on Android shares PDF and pictures, not Word / Excel / zip.) */
+  U.canShareFile = (blob, filename, mime) => {
+    try { return !!(navigator.canShare && navigator.canShare({ files: [new File([blob], filename, { type: mime })] })); } catch (e) { return false; }
+  };
+  /* The "Share / Send" button, or "How to send" when the phone cannot share this kind of file directly. */
+  U.sendAction = (blob, filename, mime, savedInFolder, kind) => {
+    if (U.canShareFile(blob, filename, mime)) {
+      return { label: 'Share / Send', kind, onClick: async () => {
+        const ok = await U.shareBlob(blob, filename, mime);
+        if (!ok) U.alert(U.sendHelp(filename, savedInFolder), 'How to send');
+        return false;
+      } };
+    }
+    return { label: 'How to send', kind, onClick: () => { U.alert(U.sendHelp(filename, savedInFolder), 'How to send this file'); return false; } };
+  };
+  U.sendHelp = (filename, savedInFolder) =>
+    `This phone cannot send this kind of file straight from the app.\n\n1. ${savedInFolder ? 'The file is saved in the folder you chose' : 'Tap “Save file” — it goes to Downloads'}:\n   ${filename}\n2. Open WhatsApp › chat › 📎 › Document (or Gmail › Attach file).\n3. Pick the file from ${savedInFolder ? 'that folder' : 'Downloads'}.\n\nPDF files can be shared directly with “Share / Send”.`;
   U.canShareFiles = () => {
     try { return !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.pdf', { type: 'application/pdf' })] })); } catch (e) { return false; }
   };

@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — backup files (.cupg). One file holds schools + all their photos.
+/* Infra Upgrades — backup files (.cupg). One file holds schools + all their photos.
    Used to keep a safe copy, to move data to a laptop, or to combine the team's surveys. */
 (function () {
   'use strict';
@@ -38,9 +38,9 @@
   U.restoreBackup = async (file, ask, progress) => {
     const zip = await U.readZip(file);
     const dataEntry = zip.get('data.json');
-    if (!dataEntry) throw new Error('This file is not a CivilOS Upgrades backup.');
+    if (!dataEntry) throw new Error('This file is not a Infra Upgrades backup.');
     const data = JSON.parse(await dataEntry.text());
-    if (data.app !== 'civilos-upgrades') throw new Error('This file is not a CivilOS Upgrades backup.');
+    if (data.app !== 'civilos-upgrades') throw new Error('This file is not a Infra Upgrades backup.');
     let nS = 0, nP = 0;
     const total = (data.photos || []).length || 1;
     for (const s of data.schools || []) {
@@ -84,7 +84,7 @@
   U.readTemplateFile = async (file) => {
     const d = JSON.parse(await file.text());
     const t = d && (d.template || d);
-    if (!t || !Array.isArray(t.checklist) || !Array.isArray(t.school)) throw new Error('This file is not a CivilOS Upgrades survey form.');
+    if (!t || !Array.isArray(t.checklist) || !Array.isArray(t.school)) throw new Error('This file is not a Infra Upgrades survey form.');
     return t;
   };
 })();

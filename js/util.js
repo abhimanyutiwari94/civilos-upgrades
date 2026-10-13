@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — small helpers shared by every screen. */
+/* Infra Upgrades — small helpers shared by every screen. */
 (function () {
   'use strict';
   const U = (self.U = self.U || {});

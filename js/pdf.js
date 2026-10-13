@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — PDF writer (A4, real text, photos embedded). No libraries.
+/* Infra Upgrades — PDF writer (A4, real text, photos embedded). No libraries.
    English text uses the PDF's built-in Helvetica; any other script (e.g. Hindi) is drawn
    by the phone and placed as a tiny picture so it always prints correctly. */
 (function () {

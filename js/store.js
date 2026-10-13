@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — app state and auto-save.
+/* Infra Upgrades — app state and auto-save.
    Every change is saved within a fraction of a second, and again the moment the
    app is hidden or closed. A second copy of the open school is kept as a safety net. */
 (function () {
@@ -37,7 +37,9 @@
       quantities: true,
       signatures: true,
       appCredit: false,
+      qty: true,
     },
+    qty: { on: false, fmt: 'xlsx' },
     photo: {
       maxSide: 2560, // long side in pixels — sharp but small (about 0.5–0.9 MB)
       quality: 0.82,
@@ -68,6 +70,7 @@
     if (S.settings.brand.reportTitle === 'School Infrastructure Survey Report') S.settings.brand.reportTitle = 'School Site Visit Report';
     if (!S.settings.brand.projectName) S.settings.brand.projectName = 'CSR School Renovation';
     S.template = (await U.DB.kvGet('template')) || self.CU_DEFAULT_TEMPLATE();
+    if (U.migrateTemplate(S.template)) await U.saveTemplate();
     await U.refreshSchools();
   };
   U.saveSettings = async () => { await U.DB.kvSet('settings', S.settings); };
@@ -129,6 +132,7 @@
     try { localStorage.setItem(mirrorKey(s.id), JSON.stringify(s)); } catch (e) { /* storage full — DB copy still holds */ }
   }
 
+  const mirrorSoon = U.debounce((s) => mirror(s), 250);
   let pending = null;
   async function writeNow() {
     const s = pending;
@@ -157,7 +161,7 @@
     if (!s) return;
     s.updated = Date.now();
     pending = s;
-    mirror(s);
+    mirrorSoon(s); // safety copy a moment later (typing stays fast); written at once when the app is hidden
     S.saving++;
     emit();
     S.saving--;
@@ -220,22 +224,108 @@
     if (fl.calc === 'wall') { const [l, b, ht] = v; if (l == null || b == null || ht == null) return null; return 2 * (l + b) * ht; }
     return null;
   };
-  U.spaceUsesChecklist = (sp) => (sp.useChecklist != null ? sp.useChecklist : !!U.T.type(sp.typeId).checklist);
+  U.T.allSpaceChecks = () => S.template.roomChecklist.concat(S.template.toiletChecklist || []).flatMap((s) => s.items);
+  U.T.group = (sp) => U.T.type(sp.typeId).group || 'room';
+
+  /* Which checklist a space uses: the room checklist, the toilet checklist, or none. */
+  U.checklistKind = (sp) => {
+    const t = U.T.type(sp.typeId);
+    let kind = t.checklist === true ? 'room' : t.checklist || false;
+    if (sp.useChecklist === false) return false;
+    if (sp.useChecklist === true && !kind) kind = 'room';
+    return kind;
+  };
+  U.checklistFor = (sp) => {
+    const k = U.checklistKind(sp);
+    return k === 'toilet' ? (S.template.toiletChecklist || []) : k ? S.template.roomChecklist : [];
+  };
+  U.checksOf = (sp) => U.checklistFor(sp).flatMap((s) => s.items);
+  U.spaceUsesChecklist = (sp) => U.checklistFor(sp).length > 0;
+
+  /* Room boxes for this kind of space. A box that already holds data always shows, so nothing is ever hidden. */
+  const fits = (x, g) => !x.groups || !x.groups.length || x.groups.includes(g);
+  const hasValue = (sp, fl) => fl.type !== 'calc' && sp.data && sp.data[fl.id] != null && sp.data[fl.id] !== '' && !(Array.isArray(sp.data[fl.id]) && !sp.data[fl.id].length);
+  U.fieldSectionsFor = (sp) => {
+    const g = U.T.group(sp);
+    return S.template.spaceFields.map((sec) => ({ sec, fields: sec.fields.filter((fl) => (fits(sec, g) && fits(fl, g)) || hasValue(sp, fl)) })).filter((x) => x.fields.length);
+  };
+  U.fieldsOfSpace = (sp) => U.fieldSectionsFor(sp).flatMap((x) => x.fields);
+
+  /* Does this answer mean work is needed? (condition buttons, or the point's own "work" choices) */
+  const BAD = new Set(['repair', 'replace', 'notavail', 'rebuild']);
+  U.needsWork = (it, v) => !!v && (BAD.has(v) || ((it && it.work) || []).includes(v));
+
   U.spaceTitle = (sp) => (sp.name || U.T.type(sp.typeId).label || 'Space').trim();
   U.spaceWhere = (sp) => [sp.block, sp.floor].map((x) => String(x || '').trim()).filter(Boolean).join(' · ');
   U.liveSpaces = (s) => (s.spaces || []).filter((x) => !x.deleted);
 
-  /* Progress = items that have a condition chosen, out of all items. */
+  /* Progress = points answered, out of all points (points with no answer buttons count when Count/Size or Notes is filled). */
+  const answered = (it, r) => !!(r && (r.c || ((it.ans && !it.ans.length) && (r.q || r.n))));
   U.progress = (s) => {
     const items = U.T.allChecks();
-    let done = items.filter((i) => s.checks[i.id] && s.checks[i.id].c).length;
+    let done = items.filter((i) => answered(i, s.checks[i.id])).length;
     let total = items.length;
     for (const sp of U.liveSpaces(s)) {
-      if (!U.spaceUsesChecklist(sp)) continue;
-      const ri = U.T.allRoomChecks();
+      const ri = U.checksOf(sp);
       total += ri.length;
-      done += ri.filter((i) => sp.checks && sp.checks[i.id] && sp.checks[i.id].c).length;
+      done += ri.filter((i) => answered(i, sp.checks && sp.checks[i.id])).length;
     }
     return total ? done / total : 0;
+  };
+  U.isAnswered = answered;
+
+  /* Bring a survey form saved on the phone up to the current version without losing anything
+     the team added or removed. Returns true when something changed. */
+  U.migrateTemplate = (T) => {
+    let ch = false;
+    const D = self.CU_DEFAULT_TEMPLATE();
+    /* one box / point can never appear twice (same id) */
+    const dedupe = (secs, key) => {
+      const seen = new Set();
+      for (const sec of secs || []) {
+        const before = (sec[key] || []).length;
+        sec[key] = (sec[key] || []).filter((x) => { if (!x || !x.id || seen.has(x.id)) return false; seen.add(x.id); return true; });
+        if (sec[key].length !== before) ch = true;
+      }
+    };
+    dedupe(T.school, 'fields'); dedupe(T.checklist, 'items'); dedupe(T.spaceFields, 'fields'); dedupe(T.roomChecklist, 'items');
+    if (T.toiletChecklist) dedupe(T.toiletChecklist, 'items');
+    for (const sec of T.school.concat(T.spaceFields)) for (const fl of sec.fields) if (fl.options) {
+      const u = [...new Set(fl.options)];
+      if (u.length !== fl.options.length) { fl.options = u; ch = true; }
+    }
+    if ((T.tv || 1) < 2) {
+      const removed = new Set((T.removed || []).map((r) => (r.kind === 'section' ? r.section.id : r.entry && r.entry.id)));
+      const defItems = new Map(D.checklist.concat(D.roomChecklist).flatMap((x) => x.items).map((i) => [i.id, i]));
+      for (const it of T.checklist.concat(T.roomChecklist).flatMap((x) => x.items)) {
+        const d = defItems.get(it.id);
+        if (d && d.ans && it.ans === undefined) { it.ans = d.ans.slice(); it.work = d.work.slice(); }
+      }
+      const defF = new Map(D.spaceFields.flatMap((x) => x.fields).map((x) => [x.id, x]));
+      for (const fl of T.spaceFields.flatMap((x) => x.fields)) { const d = defF.get(fl.id); if (d && d.groups && fl.groups === undefined) fl.groups = d.groups.slice(); }
+      const have = new Set(T.spaceFields.flatMap((x) => x.fields).map((x) => x.id));
+      const size = T.spaceFields.find((x) => x.id === 'sp_size');
+      if (size && !have.has('sp_wall1') && !removed.has('sp_wall1')) {
+        const i = size.fields.findIndex((x) => x.id === 'sp_wall');
+        size.fields.splice(i < 0 ? size.fields.length : i + 1, 0, defF.get('sp_wall1'));
+      }
+      for (const id of ['sp_toilet', 'sp_water']) {
+        if (T.spaceFields.some((x) => x.id === id) || removed.has(id)) continue;
+        const at = T.spaceFields.findIndex((x) => x.id === 'sp_work');
+        T.spaceFields.splice(at < 0 ? T.spaceFields.length : at, 0, D.spaceFields.find((x) => x.id === id));
+      }
+      const defT = new Map(D.spaceTypes.map((t) => [t.id, t]));
+      for (const t of T.spaceTypes) {
+        const d = defT.get(t.id);
+        if (!t.group) t.group = d ? d.group : 'room';
+        if (t.checklist === true) t.checklist = 'room';
+        if (d && d.checklist === 'toilet' && t.checklist === false) t.checklist = 'toilet';
+      }
+      if (!T.toiletChecklist) T.toiletChecklist = D.toiletChecklist;
+      if (!T.qtyCatalog) T.qtyCatalog = D.qtyCatalog;
+      T.tv = 2;
+      ch = true;
+    }
+    return ch;
   };
 })();

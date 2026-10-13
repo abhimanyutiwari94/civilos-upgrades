@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — saffron theme, phone first, readable in sunlight. */
+/* Infra Upgrades — saffron theme, phone first, readable in sunlight. */
 :root {
   --saffron: #f57c00;
   --saffron-2: #ff9933;
@@ -372,3 +372,41 @@ select.inp { appearance: auto; }
 .thumb.picked { outline: 3px solid var(--bad); outline-offset: -3px; }
 .thumb.picked img { opacity: 0.7; }
 .thumb.picked .pick { background: var(--bad); color: #fff; }
+.cam-gps.poor { background: #b3261e; white-space: normal; max-width: 46vw; text-align: center; }
+
+/* ---- compact top area: more room for work on small phones (portrait) ---- */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+:root { --top-h: 52px; }
+.top { min-height: var(--top-h); padding: 4px 6px; padding-top: max(4px, env(safe-area-inset-top)); gap: 2px; }
+.top h1 { font-size: 17px; line-height: 1.2; }
+.top .sub { font-size: 12px; line-height: 1.2; }
+.top .logo { width: 32px; height: 32px; border-radius: 8px; }
+.icon-btn { width: 42px; height: 42px; }
+.tabs { position: static; padding: 4px 6px 0; gap: 2px; }
+.tab { padding: 5px 6px 6px; font-size: 12.5px; min-width: 58px; gap: 1px; }
+.tab .ic { width: 18px; height: 18px; }
+@media (max-width: 400px) {
+  .top h1 { font-size: 16px; }
+  .page { padding: 10px; }
+  .card { padding: 12px; }
+  .acc-head { padding: 12px; }
+}
+@media (max-height: 700px) and (orientation: portrait) {
+  .tab .ic { display: none; }
+  .tab { padding: 8px 6px; }
+}
+/* small form editor selects, quantity lines */
+.small-sel { min-height: 34px; padding: 4px 8px; font-size: 13px; width: auto; }
+.ed-item.wrap { flex-wrap: wrap; }
+.qty-line { display: flex; gap: 4px; align-items: flex-start; padding: 8px 0; border-bottom: 1px dashed #ead8c4; }
+.qty-line:last-child { border-bottom: 0; }
+.qty-line .icon-btn { width: 36px; height: 36px; color: var(--ink-2); }
+.qty-miss { color: var(--bad); font-weight: 600; }
+.qty-dims { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.qty-dims .field { margin-bottom: 6px; }
+.qty-result { font-weight: 700; color: var(--saffron-deep); background: var(--saffron-soft); border-radius: 10px; padding: 10px 12px; margin: 4px 0 12px; }
+.qty-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.qty-table th { background: #214366; color: #fff; padding: 6px; text-align: left; }
+.qty-table td { border-bottom: 1px solid var(--line); padding: 6px; vertical-align: top; }
+.qty-table td.num { text-align: right; font-weight: 700; white-space: nowrap; }
+.qty-table tr.cat td { background: #f28120; color: #fff; font-weight: 700; }

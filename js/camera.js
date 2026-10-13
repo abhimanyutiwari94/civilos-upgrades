@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — camera, GPS and the photo stamp.
+/* Infra Upgrades — camera, GPS and the photo stamp.
    Stamp = very small text, bottom-left: location name + GPS coordinates (as chosen in Settings). */
 (function () {
   'use strict';
@@ -6,41 +6,76 @@
   const h = U.h;
 
   /* ---------------- GPS ---------------- */
+  /* Accurate location: the phone's first answer is often a rough network guess (hundreds of metres).
+     We keep listening to real GPS and always use the most accurate reading of the last 30 seconds;
+     before stamping a photo we wait a moment for a good reading. */
+  const GOOD = 20; // metres
   const Geo = (U.Geo = {
-    fix: null, // {lat,lng,acc,ts}
+    fix: null, // most recent {lat,lng,acc,ts}
+    recent: [], // readings of the last 30 s
     err: null,
     watchId: null,
     users: 0,
     subs: new Set(),
+    add(p) {
+      const f = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy, ts: Date.now() };
+      if (!isFinite(f.lat) || !isFinite(f.lng)) return;
+      Geo.fix = f;
+      Geo.recent = Geo.recent.filter((x) => f.ts - x.ts < 30000).concat(f);
+      Geo.err = null;
+      Geo.subs.forEach((fn) => fn());
+    },
     start() {
       Geo.users++;
       if (Geo.watchId != null || !navigator.geolocation) return;
       try {
-        Geo.watchId = navigator.geolocation.watchPosition((p) => {
-          Geo.fix = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy, ts: Date.now() };
-          Geo.err = null;
-          Geo.subs.forEach((f) => f());
-        }, (e) => {
+        Geo.watchId = navigator.geolocation.watchPosition((p) => Geo.add(p), (e) => {
           Geo.err = e && e.code === 1 ? 'Location permission is off' : 'Waiting for GPS…';
           Geo.subs.forEach((f) => f());
-        }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 });
+        }, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
       } catch (e) { Geo.err = 'Location not available'; }
     },
     stop() {
       Geo.users = Math.max(0, Geo.users - 1);
       if (Geo.users === 0 && Geo.watchId != null) { navigator.geolocation.clearWatch(Geo.watchId); Geo.watchId = null; }
     },
-    fresh() { return Geo.fix && Date.now() - Geo.fix.ts < 3 * 60000 ? Geo.fix : null; },
-    once(timeoutMs) {
+    /* best (smallest error) reading of the last 30 s, else the last one if under 3 minutes old */
+    fresh() {
+      const now = Date.now();
+      const r = Geo.recent.filter((x) => now - x.ts < 30000);
+      if (r.length) return r.reduce((a, b) => (b.acc < a.acc || (b.acc === a.acc && b.ts > a.ts) ? b : a));
+      return Geo.fix && now - Geo.fix.ts < 3 * 60000 ? Geo.fix : null;
+    },
+    /* wait up to ms for a reading within GOOD metres; returns the best reading seen */
+    good(ms) {
+      const f = Geo.fresh();
+      if (f && f.acc <= GOOD && Date.now() - f.ts < 15000) return Promise.resolve(f);
+      return new Promise((res) => {
+        const done = () => { Geo.subs.delete(chk); clearTimeout(t); res(Geo.fresh()); };
+        const chk = () => { const x = Geo.fresh(); if (x && x.acc <= GOOD) done(); };
+        Geo.subs.add(chk);
+        const t = setTimeout(done, ms || 2500);
+      });
+    },
+    /* a careful single location (school GPS): listen up to timeoutMs, stop early at ≤ 10 m, keep the best */
+    once(timeoutMs, onProgress) {
       return new Promise((res) => {
         if (!navigator.geolocation) { res(null); return; }
-        navigator.geolocation.getCurrentPosition(
-          (p) => { Geo.fix = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy, ts: Date.now() }; res(Geo.fix); },
-          () => res(Geo.fresh()),
-          { enableHighAccuracy: true, maximumAge: 10000, timeout: timeoutMs || 20000 });
+        let best = null, id = null;
+        const finish = () => { if (id != null) navigator.geolocation.clearWatch(id); clearTimeout(t); res(best || Geo.fresh()); };
+        const t = setTimeout(finish, timeoutMs || 15000);
+        try {
+          id = navigator.geolocation.watchPosition((p) => {
+            Geo.add(p);
+            if (!best || p.coords.accuracy < best.acc) best = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy, ts: Date.now() };
+            if (onProgress) onProgress(best);
+            if (best.acc <= 10) finish();
+          }, () => { /* keep waiting until the time is up */ }, { enableHighAccuracy: true, maximumAge: 0, timeout: timeoutMs || 15000 });
+        } catch (e) { finish(); }
       });
     },
   });
+  U.gpsQuality = (f) => (!f ? 'none' : f.acc <= GOOD ? 'good' : f.acc <= 50 ? 'fair' : 'poor');
 
   /* ---------------- stamp + save ---------------- */
   function fitText(g, text, maxW) {
@@ -224,9 +259,11 @@
     function refreshPlace() { placeBtn.textContent = placeText() || 'Tap to name this place'; }
     function refreshGps() {
       const f = Geo.fresh();
-      gpsPill.textContent = f ? `GPS ±${Math.round(f.acc)} m` : (Geo.err || 'Finding GPS…');
-      gpsPill.classList.toggle('ok', !!f && f.acc <= 30);
-      gpsPill.classList.toggle('weak', !!f && f.acc > 30);
+      const q = U.gpsQuality(f);
+      gpsPill.textContent = !f ? (Geo.err || 'Finding GPS…') : q === 'poor' ? `GPS weak ±${Math.round(f.acc)} m — wait / go outside` : `GPS ±${Math.round(f.acc)} m`;
+      gpsPill.classList.toggle('ok', q === 'good');
+      gpsPill.classList.toggle('weak', q === 'fair');
+      gpsPill.classList.toggle('poor', q === 'poor');
     }
     Geo.subs.add(refreshGps);
     const gpsTimer = setInterval(refreshGps, 3000);
@@ -367,13 +404,14 @@
     });
 
     function process(blob, source, fixOverride, tsOverride) {
-      const fix = fixOverride || Geo.fresh();
       const ts = tsOverride || Date.now();
       const place = placeText();
       const thisTag = tag;
       busy++; showBusy();
+      const fixP = fixOverride ? Promise.resolve(fixOverride) : Geo.good(2500); // wait a moment for an accurate reading
       queue = queue.then(async () => {
         try {
+          const fix = await fixP;
           const r = await U.stampPhoto(blob, U.stampLines(place, fix, ts), { maxSide: st.maxSide, quality: st.quality, size: st.stampSize });
           const meta = await opts.onSave(Object.assign(r, { fix, ts, tag: thisTag, place, source }));
           count++;
@@ -443,7 +481,7 @@
     const files = await U.pickImages({ capture: true });
     let n = 0;
     for (const f of files) {
-      const fix = Geo.fresh() || (await Geo.once(8000));
+      const fix = await Geo.good(4000) || (await Geo.once(8000));
       const r = await U.stampPhoto(f, U.stampLines(opts.place(), fix, Date.now()),
         { maxSide: U.S.settings.photo.maxSide, quality: U.S.settings.photo.quality, size: U.S.settings.photo.stampSize });
       await opts.onSave(Object.assign(r, { fix, ts: Date.now(), tag: '', place: opts.place(), source: 'phone' }));

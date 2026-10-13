@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — report preview: shows the report as pages before it is saved,
+/* Infra Upgrades — report preview: shows the report as pages before it is saved,
    built from the same report blocks the PDF / Word / Excel writers use, in the company format. */
 (function () {
   'use strict';

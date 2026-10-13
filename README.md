@@ -1,4 +1,4 @@
-# CivilOS Upgrades
+# Infra Upgrades
 
 Offline school survey app (installable web app). Open the link in Chrome on the phone and choose Install app.
 

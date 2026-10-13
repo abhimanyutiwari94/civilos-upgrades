@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — Excel (.xlsx) writer with photos placed in the Photos sheet. */
+/* Infra Upgrades — Excel (.xlsx) writer with photos placed in the Photos sheet. */
 (function () {
   'use strict';
   const U = self.U;
@@ -63,7 +63,8 @@
           if (!cell) continue;
           const ref = col(c) + (r + 1);
           const st = cell.s ? ` s="${cell.s}"` : '';
-          if (typeof cell.v === 'number' && isFinite(cell.v)) out.push(`<c r="${ref}"${st}><v>${cell.v}</v></c>`);
+          if (cell.v && typeof cell.v === 'object' && cell.v.f) out.push(`<c r="${ref}"${st}><f>${X(cell.v.f.replace(/\{r\}/g, String(r + 1)))}</f><v>${isFinite(cell.v.v) ? cell.v.v : 0}</v></c>`);
+          else if (typeof cell.v === 'number' && isFinite(cell.v)) out.push(`<c r="${ref}"${st}><v>${cell.v}</v></c>`);
           else if (cell.v == null || cell.v === '') out.push(`<c r="${ref}"${st}/>`);
           else out.push(`<c r="${ref}"${st} t="inlineStr"><is><t xml:space="preserve">${X(cell.v)}</t></is></c>`);
         }
@@ -179,7 +180,7 @@
     r = 1;
     for (const s of spaces) {
       if (!U.spaceUsesChecklist(s)) continue;
-      for (const sec of T.roomChecklist) for (const it of sec.items) {
+      for (const sec of U.checklistFor(s)) for (const it of sec.items) {
         const v = (s.checks && s.checks[it.id]) || {};
         const key = `si:${s.id}:${it.id}`;
         if (!o.includeBlank && !v.c && !v.q && !v.n && !refs(key)) continue;
@@ -197,7 +198,7 @@
       ph.freeze = 1;
       const itemName = new Map();
       for (const sec of T.checklist) for (const it of sec.items) itemName.set('item:' + it.id, `${it.no} ${it.what}`);
-      const roomItem = new Map(U.T.allRoomChecks().map((it) => [it.id, `${it.no} ${it.what}`]));
+      const roomItem = new Map(U.T.allSpaceChecks().map((it) => [it.id, `${it.no} ${it.what}`]));
       const spaceName = new Map(spaces.map((s) => [s.id, U.spaceTitle(s)]));
       for (let i = 0; i < live.length; i++) {
         const p = live[i];
@@ -223,11 +224,17 @@
       }
     }
 
+    /* work quantities with formulas (or the quantity sheet on its own) */
+    const qs = U.isQtyOn() || o.qtyOnly ? U.qtySheets(school, Sheet, ST) : [];
+    if (o.qtyOnly) {
+      sheets.splice(0, sheets.length, ...qs);
+      if (!sheets.length) { const e = new Sheet('Quantities'); e.widths = [60]; e.set(0, 0, 'No work quantities have been entered yet.', ST.cell); sheets.push(e); }
+    } else if (o.qty !== false) sheets.push(...qs);
     if (progress) progress('Making the Excel file…', 0.94);
     const z = new U.ZipWriter();
     const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<numFmts count="1"><numFmt numFmtId="164" formatCode="0.##"/></numFmts>
+
 <fonts count="9"><font><sz val="10"/><color rgb="FF333333"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="15"/><color rgb="FF214366"/><name val="Arial"/><family val="2"/></font><font><sz val="9"/><color rgb="FF6E6E6E"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="12"/><color rgb="FF214366"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="10"/><color rgb="FF214366"/><name val="Arial"/><family val="2"/></font><font><b/><i/><sz val="10"/><color rgb="FFF28120"/><name val="Arial"/><family val="2"/></font><font><sz val="8"/><color rgb="FF333333"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="10"/><color rgb="FF333333"/><name val="Arial"/><family val="2"/></font></fonts>
 <fills count="12"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF214366"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD6E4F0"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF9C4"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF28120"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE2EFDA"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFE699"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF8CBAD"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9D2E9"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE7E6E6"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/><bgColor indexed="64"/></patternFill></fill></fills>
 <borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFBFBFBF"/></left><right style="thin"><color rgb="FFBFBFBF"/></right><top style="thin"><color rgb="FFBFBFBF"/></top><bottom style="thin"><color rgb="FFBFBFBF"/></bottom><diagonal/></border><border><left/><right/><top/><bottom style="medium"><color rgb="FFF28120"/></bottom><diagonal/></border></borders>
@@ -238,10 +245,10 @@
 <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
 <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>
 <xf numFmtId="0" fontId="5" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
-<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>
 <xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>
 <xf numFmtId="0" fontId="5" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
-<xf numFmtId="164" fontId="5" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right"/></xf>
+<xf numFmtId="0" fontId="5" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right"/></xf>
 <xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1"/>
 <xf numFmtId="0" fontId="5" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="right" vertical="bottom"/></xf>
 <xf numFmtId="0" fontId="6" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>

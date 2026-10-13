@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — room-wise export: photos with remarks and data, per room.
+/* Infra Upgrades — room-wise export: photos with remarks and data, per room.
    One file with each room on its own page, a separate file per room, or just the photos (JPG) in a folder per room. */
 (function () {
   'use strict';
@@ -35,7 +35,7 @@
       }
     } else {
       const sp = s.spaces.find((x) => x.id === key);
-      if (sp && U.spaceUsesChecklist(sp)) for (const it of U.T.allRoomChecks()) {
+      if (sp) for (const it of U.checksOf(sp)) {
         const r = (sp.checks && sp.checks[it.id]) || {};
         const pr = refs(`si:${key}:${it.id}`);
         if (!(r.c || r.q || r.n || pr)) continue;
@@ -66,7 +66,7 @@
         const sub = [U.T.type(sp.typeId).label, U.spaceWhere(sp)].filter(Boolean).join(' · ');
         if (sub) blocks.push({ t: 'p', text: sub, muted: true });
         if (o.data) {
-          const rows = U.T.allSpaceFields().map((fl) => [fl.label, U.fieldText(fl, sp.data || {})]).filter((r) => r[1]);
+          const rows = U.fieldsOfSpace(sp).map((fl) => [fl.label, U.fieldText(fl, sp.data || {})]).filter((r) => r[1]);
           if (rows.length) blocks.push({ t: 'kv', rows, cols: 4 });
         }
       }
@@ -82,7 +82,7 @@
     return {
       blocks, title: 'Room-wise Photos and Remarks', school: U.schoolName(s), lh: U.letterhead(s, o, 'Room-wise Photos and Remarks'),
       header: U.schoolName(s), footer: b.footerNote || '',
-      credit: o.appCredit ? 'Prepared with CivilOS Upgrades' : '', perRow: o.perRow || 2, photoSize: o.photoSize || 1400, work: [],
+      credit: o.appCredit ? 'Prepared with Infra Upgrades' : '', perRow: o.perRow || 2, photoSize: o.photoSize || 1400, work: [],
     };
   };
 
@@ -102,7 +102,7 @@
         const sp = s.spaces.find((x) => x.id === key);
         const where = [U.T.type(sp.typeId).label, U.spaceWhere(sp)].filter(Boolean).join(' · ');
         if (where) lines.push(where, '');
-        if (o.data) for (const fl of U.T.allSpaceFields()) { const v = U.fieldText(fl, sp.data || {}); if (v) lines.push(`${fl.label}: ${v}`); }
+        if (o.data) for (const fl of U.fieldsOfSpace(sp)) { const v = U.fieldText(fl, sp.data || {}); if (v) lines.push(`${fl.label}: ${v}`); }
         if (sp.notes) lines.push('', 'Remarks: ' + sp.notes);
       }
       if (o.remarks) {
@@ -150,7 +150,7 @@
     const filename = (handle && handle.name) || name + t.ext;
     const actions = [];
     if (!handle) actions.push({ label: 'Save file', kind: 'primary', onClick: () => { U.downloadBlob(blob, filename); U.toast('Saved to Downloads: ' + filename, 4000); return false; } });
-    if (U.canShareFiles()) actions.push({ label: 'Share / Send', kind: handle ? 'primary' : '', onClick: async () => { await U.shareBlob(blob, filename, t.mime); return false; } });
+    actions.push(U.sendAction(blob, filename, t.mime, !!handle, handle ? 'primary' : ''));
     actions.push({ label: 'Close', kind: 'ghost' });
     U.modal({ title: 'File ready', body: [h('p', h('b', filename)), h('p.muted', `${t.desc} · ${U.fmtBytes(blob.size)}`),
       kind === 'zip' ? h('p.small.muted', 'This is a .zip folder. On the phone, open it in the Files app and tap “Extract”. On a laptop, right-click › Extract all.') : null], actions });

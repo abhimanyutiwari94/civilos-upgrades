@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — ZIP writer/reader (for .docx, .xlsx and backup files). No libraries. */
+/* Infra Upgrades — ZIP writer/reader (for .docx, .xlsx and backup files). No libraries. */
 (function () {
   'use strict';
   const U = self.U;
@@ -86,7 +86,7 @@
     const tail = new DataView(await file.slice(file.size - tailLen).arrayBuffer());
     let eocd = -1;
     for (let i = tail.byteLength - 22; i >= 0; i--) if (tail.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
-    if (eocd < 0) throw new Error('This is not a CivilOS Upgrades file.');
+    if (eocd < 0) throw new Error('This is not a Infra Upgrades file.');
     const count = tail.getUint16(eocd + 10, true);
     const cdSize = tail.getUint32(eocd + 12, true);
     const cdOff = tail.getUint32(eocd + 16, true);

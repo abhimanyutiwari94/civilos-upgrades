@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — Settings, survey-form editor, Help, lock screen, backup/restore flows. */
+/* Infra Upgrades — Settings, survey-form editor, Help, lock screen, backup/restore flows. */
 (function () {
   'use strict';
   const U = self.U, S = U.S, h = U.h;
@@ -73,11 +73,16 @@
 
     /* survey form */
     page.append(h('div.card',
+      h('h2', 'Work quantities'),
+      h('p.small.muted', 'When on, every room and space can collect repair / new work quantities (plaster, painting, waterproofing, rebuild …) with sizes. The app adds up the total of every item for the school. Excel gets real formulas. A “Quantities” tab appears in each school.'),
+      (() => { const c = h('input', { type: 'checkbox', checked: U.isQtyOn() }); c.addEventListener('change', () => { S.settings.qty.on = c.checked; save(); U.toast(c.checked ? 'Work quantities on' : 'Work quantities off'); }); return h('label.switch', h('span', h('b', 'Collect work quantities')), c); })(),
+      h('button.btn.soft.small', { style: { marginTop: '6px' }, onclick: () => U.go('/form/qtyCatalog') }, U.icon('edit'), 'Edit quantity items')));
+    page.append(h('div.card',
       h('h2', 'Survey form'),
       h('p.small.muted', 'Add, rename or remove headings and boxes. Changes apply to all schools. Data already typed is never deleted.'),
       h('div.row.wrap',
         h('button.btn.primary', { onclick: () => U.go('/form') }, U.icon('edit'), 'Edit survey form'),
-        h('button.btn.soft', { onclick: () => U.saveBlobFlow(U.templateFile(), 'CivilOS Upgrades - survey form', 'json') }, U.icon('share'), 'Share form file'),
+        h('button.btn.soft', { onclick: () => U.saveBlobFlow(U.templateFile(), 'Infra Upgrades - survey form', 'json') }, U.icon('share'), 'Share form file'),
         h('button.btn.soft', { onclick: () => U.loadFormFlow() }, U.icon('upload'), 'Load form file'))));
 
     /* backup */
@@ -106,7 +111,7 @@
     page.append(h('div.card',
       h('h2', 'Danger zone'),
       h('button.btn', { style: { color: 'var(--bad)' }, onclick: () => eraseAll() }, U.icon('trash'), 'Erase ALL schools on this phone')));
-    page.append(h('div.footer-note', `CivilOS Upgrades · version ${self.CU_VERSION || ''}`));
+    page.append(h('div.footer-note', `Infra Upgrades · version ${self.CU_VERSION || ''}`));
 
     async function eraseAll() {
       const inp = h('input.inp.code-inp', { placeholder: 'ERASE ALL' });
@@ -140,12 +145,15 @@
     ['text', 'Short text'], ['longtext', 'Long text'], ['number', 'Number'], ['choice', 'Choose one (chips)'],
     ['multi', 'Choose many (chips)'], ['yesno', 'Yes / No'], ['date', 'Date'], ['phone', 'Phone number'], ['gps', 'GPS location'],
   ];
+  const GROUPS = { room: 'Rooms', toilet: 'Toilets', corridor: 'Corridors / verandahs', open: 'Open areas', wall: 'Walls / gates', water: 'Water points' };
   const PARTS = [
     { id: 'school', label: 'School details', kind: 'fields', help: 'Boxes filled once per school (name, address, students…).' },
     { id: 'checklist', label: 'School checklist', kind: 'items', help: 'Points checked once per school with Condition, Count/Size, Notes and photos.' },
-    { id: 'spaceFields', label: 'Room boxes', kind: 'fields', help: 'Sizes and counts asked in every room / space.' },
+    { id: 'spaceFields', label: 'Room boxes', kind: 'fields', help: 'Sizes and counts asked in rooms / spaces. Each box shows only in the kinds of space ticked for it (edit a box to change).' },
     { id: 'roomChecklist', label: 'Room checklist', kind: 'items', help: 'Points checked in every room that uses the room checklist.' },
-    { id: 'spaceTypes', label: 'Room types', kind: 'types', help: 'Kinds of rooms and spaces you can add.' },
+    { id: 'toiletChecklist', label: 'Toilet checklist', kind: 'items', help: 'Points checked in every toilet (boys, girls, staff, disabled).' },
+    { id: 'spaceTypes', label: 'Room types', kind: 'types', help: 'Kinds of rooms and spaces you can add, which boxes they show and which checklist they use.' },
+    { id: 'qtyCatalog', label: 'Quantity items', kind: 'qty', help: 'Work items for Work quantities (Settings): category, item, unit and how the quantity is worked out.' },
     { id: 'other', label: 'Conditions & tags', kind: 'other', help: 'Condition buttons and photo tags.' },
   ];
 
@@ -204,18 +212,38 @@
     } else if (P.kind === 'types') {
       const card = h('div.card');
       T.spaceTypes.forEach((t, i) => {
-        const cb = h('input', { type: 'checkbox', checked: !!t.checklist, title: 'Use room checklist' });
-        cb.addEventListener('change', () => { t.checklist = cb.checked; save(); });
-        card.append(h('div.ed-item', h('div.txt', t.label, h('small', 'Room checklist ' + (t.checklist ? 'on' : 'off'))), cb,
+        const gsel = h('select.inp.small-sel', Object.entries(GROUPS).map(([k, l]) => h('option', { value: k, selected: (t.group || 'room') === k }, l)));
+        gsel.addEventListener('change', () => { t.group = gsel.value; save(); });
+        const ksel = h('select.inp.small-sel', [['room', 'Room checklist'], ['toilet', 'Toilet checklist'], ['', 'No checklist']].map(([k, l]) => h('option', { value: k, selected: (t.checklist === true ? 'room' : t.checklist || '') === k }, l)));
+        ksel.addEventListener('change', () => { t.checklist = ksel.value || false; save(); });
+        card.append(h('div.ed-item.wrap', h('div.txt', t.label, h('div.row', { style: { gap: '6px', marginTop: '4px' } }, gsel, ksel)),
           iconBtn('edit', 'Rename', async () => { const v = await U.promptText('Room type name', t.label); if (v && v.trim()) { t.label = v.trim(); save(); U.rerender(); } }),
           iconBtn('up', 'Up', () => move(T.spaceTypes, i, -1), i === 0),
           iconBtn('trash', 'Remove', async () => { if (await U.confirm(`Remove room type “${t.label}”? Rooms already added keep their data.`, { ok: 'Remove', danger: true })) { T.removed.push({ part, kind: 'type', at: Date.now(), entry: t }); T.spaceTypes.splice(i, 1); save(); U.rerender(); } })));
       });
       card.append(h('button.btn.soft.small', { style: { marginTop: '10px' }, onclick: async () => {
         const v = await U.promptText('New room type', '', { placeholder: 'e.g. Smart class' });
-        if (v && v.trim()) { T.spaceTypes.push({ id: U.uid('t'), label: v.trim(), checklist: true }); save(); U.rerender(); }
+        if (v && v.trim()) { T.spaceTypes.push({ id: U.uid('t'), label: v.trim(), group: 'room', checklist: 'room' }); save(); U.rerender(); }
       } }, U.icon('plus'), 'Add room type'));
       page.append(card);
+    } else if (P.kind === 'qty') {
+      T.qtyCatalog = T.qtyCatalog || [];
+      T.qtyCatalog.forEach((cat, ci) => {
+        const card = h('div.card', h('div.ed-sec-head', h('h3', cat.name),
+          iconBtn('edit', 'Rename category', async () => { const v = await U.promptText('Category name', cat.name); if (v && v.trim()) { cat.name = v.trim(); save(); U.rerender(); } }),
+          iconBtn('up', 'Move up', () => move(T.qtyCatalog, ci, -1), ci === 0),
+          iconBtn('trash', 'Remove category', async () => { if (await U.confirm(`Remove the category “${cat.name}” and its ${cat.items.length} items? Quantities already entered are kept.`, { ok: 'Remove', danger: true })) { T.qtyCatalog.splice(ci, 1); save(); U.rerender(); } })));
+        cat.items.forEach((it, ii) => card.append(h('div.ed-item', h('div.txt', it.name, h('small', `${it.unit} · ${(U.QTY_CALC[it.calc] || {}).label || it.calc}`)),
+          iconBtn('edit', 'Edit', () => editQtyItem(it, cat.items)),
+          iconBtn('up', 'Up', () => move(cat.items, ii, -1), ii === 0),
+          iconBtn('trash', 'Remove', async () => { if (await U.confirm(`Remove “${it.name}”? Quantities already entered are kept.`, { ok: 'Remove', danger: true })) { cat.items.splice(ii, 1); save(); U.rerender(); } }))));
+        card.append(h('button.btn.soft.small', { style: { marginTop: '10px' }, onclick: () => editQtyItem(null, cat.items) }, U.icon('plus'), 'Add item'));
+        page.append(card);
+      });
+      page.append(h('button.btn.primary.block', { onclick: async () => {
+        const v = await U.promptText('New category', '', { placeholder: 'e.g. Solar' });
+        if (v && v.trim()) { T.qtyCatalog.push({ id: U.uid('qc'), name: v.trim(), items: [] }); save(); U.rerender(); }
+      } }, U.icon('plus'), 'Add category'));
     } else {
       const cards = h('div.card', h('h3', 'Condition buttons'));
       T.conditions.forEach((c) => cards.append(h('div.ed-item', h('div.txt', c.label, h('small', c.hint || '')),
@@ -236,13 +264,18 @@
       gone.forEach((r) => {
         const label = r.kind === 'section' ? `Heading: ${r.section.title}` : r.kind === 'type' ? `Room type: ${r.entry.label}` : `${r.entry.label || r.entry.what}  (in ${r.secTitle})`;
         card.append(h('div.ed-item', h('div.txt', label, h('small', 'Removed ' + U.fmtDateTime(r.at))),
-          h('button.btn.small.soft', { onclick: () => {
-            if (r.kind === 'section') T[part].push(r.section);
-            else if (r.kind === 'type') T.spaceTypes.push(r.entry);
+          h('button.btn.small.soft', { onclick: (e) => {
+            e.currentTarget.disabled = true;
+            if (!T.removed.includes(r)) return; // already brought back (double tap)
+            const exists = (arr, id) => (arr || []).some((x) => x && x.id === id);
+            if (r.kind === 'section') { if (!exists(T[part], r.section.id)) T[part].push(r.section); }
+            else if (r.kind === 'type') { if (!exists(T.spaceTypes, r.entry.id)) T.spaceTypes.push(r.entry); }
             else {
               let sec = T[part].find((x) => x.id === r.secId);
               if (!sec) { sec = P.kind === 'fields' ? { id: r.secId, title: r.secTitle, fields: [] } : { id: r.secId, title: r.secTitle, items: [] }; T[part].push(sec); }
-              (P.kind === 'fields' ? sec.fields : sec.items).push(r.entry);
+              const arr = P.kind === 'fields' ? sec.fields : sec.items;
+              const all = T[part].flatMap((x) => (P.kind === 'fields' ? x.fields : x.items));
+              if (!exists(all, r.entry.id)) arr.push(r.entry);
             }
             T.removed.splice(T.removed.indexOf(r), 1);
             save(); U.rerender();
@@ -264,7 +297,13 @@
       sel.addEventListener('change', sync); sync();
       const per = h('input', { type: 'checkbox', checked: isNew ? false : U.isPerSchool(fl) });
       const perRow = part === 'school' ? h('label.switch', h('span', 'Belongs to one school only', h('div.small.muted', 'On = left empty in a new school. Off = copied from the previous school.')), per) : null;
-      U.modal({ title: isNew ? 'Add box' : 'Edit box', body: [h('div.field', h('label', 'Box name (question)'), lab), h('div.field', h('label', 'Type of answer'), sel), optWrap, h('div.field', h('label', 'Help text'), hint), perRow],
+      const gboxes = {};
+      const groupsRow = part === 'spaceFields' ? h('div.field', h('div.lbl', 'Show this box in'), h('div.chips', Object.entries(GROUPS).map(([k, l]) => {
+        const c = h('input', { type: 'checkbox', checked: !fl.groups || !fl.groups.length || fl.groups.includes(k) });
+        gboxes[k] = c;
+        return h('label.chip', { style: { display: 'inline-flex', gap: '6px', alignItems: 'center' } }, c, l);
+      }))) : null;
+      U.modal({ title: isNew ? 'Add box' : 'Edit box', body: [h('div.field', h('label', 'Box name (question)'), lab), h('div.field', h('label', 'Type of answer'), sel), optWrap, h('div.field', h('label', 'Help text'), hint), perRow, groupsRow],
         actions: [{ label: 'Cancel', kind: 'ghost' }, { label: 'Save', kind: 'primary', onClick: () => {
           if (!lab.value.trim()) { U.toast('Please type the box name'); return false; }
           fl.label = lab.value.trim();
@@ -272,7 +311,22 @@
           if (fl.type === 'choice' || fl.type === 'multi') fl.options = opts.value.split('\n').map((x) => x.trim()).filter(Boolean); else delete fl.options;
           if (hint.value.trim()) fl.hint = hint.value.trim(); else delete fl.hint;
           if (part === 'school') fl.perSchool = per.checked;
+          if (part === 'spaceFields') { const g = Object.keys(gboxes).filter((k) => gboxes[k].checked); fl.groups = g.length === Object.keys(GROUPS).length ? undefined : g; if (!fl.groups) delete fl.groups; }
           if (isNew) list.push(fl);
+          save(); U.rerender();
+        } }] });
+    }
+    function editQtyItem(it, list) {
+      const isNew = !it;
+      it = it || { id: U.uid('qi'), name: '', unit: 'sq.m', calc: 'area' };
+      const nm = h('input.inp'); nm.value = it.name;
+      const un = h('input.inp', { placeholder: 'sq.m / cu.m / m / nos / kg / litre' }); un.value = it.unit;
+      const cs = h('select.inp', Object.keys(U.QTY_CALC).map((k) => h('option', { value: k, selected: it.calc === k }, U.QTY_CALC[k].label)));
+      U.modal({ title: isNew ? 'Add quantity item' : 'Edit quantity item', body: [h('div.field', h('label', 'Item'), nm), h('div.field', h('label', 'Unit'), un), h('div.field', h('label', 'How the quantity is worked out'), cs)],
+        actions: [{ label: 'Cancel', kind: 'ghost' }, { label: 'Save', kind: 'primary', onClick: () => {
+          if (!nm.value.trim()) { U.toast('Please type the item'); return false; }
+          it.name = nm.value.trim(); it.unit = un.value.trim() || 'nos'; it.calc = cs.value;
+          if (isNew) list.push(it);
           save(); U.rerender();
         } }] });
     }
@@ -288,10 +342,21 @@
       const no = h('input.inp'); no.value = it.no || '';
       const what = h('input.inp'); what.value = it.what || '';
       const how = h('textarea.inp', { rows: 3 }); how.value = it.how || '';
-      U.modal({ title: isNew ? 'Add point' : 'Edit point', body: [h('div.field', h('label', 'No.'), no), h('div.field', h('label', 'What to check'), what), h('div.field', h('label', 'How to check (guidance)'), how)],
+      const own = h('input', { type: 'checkbox', checked: Array.isArray(it.ans) });
+      const ansT = h('textarea.inp', { rows: 4, placeholder: 'One answer per line, e.g.\nYes\nNo\nNot applicable' }); ansT.value = (it.ans || []).join('\n');
+      const workT = h('textarea.inp', { rows: 2, placeholder: 'Answers that mean work is needed (one per line)' }); workT.value = (it.work || []).join('\n');
+      const ansBox = h('div', h('div.field', h('label', 'Answer buttons'), ansT), h('div.field', h('label', 'These answers mean work is needed (go to the work list)'), workT));
+      const syncA = () => { ansBox.hidden = !own.checked; };
+      own.addEventListener('change', syncA); syncA();
+      U.modal({ title: isNew ? 'Add point' : 'Edit point', body: [h('div.field', h('label', 'No.'), no), h('div.field', h('label', 'What to check'), what), h('div.field', h('label', 'How to check (guidance)'), how),
+        h('label.switch', h('span', 'Own answer buttons', h('div.small.muted', 'Off = Good / Repair needed / Replace needed / Not available / Not applicable / Needs rebuild')), own), ansBox],
         actions: [{ label: 'Cancel', kind: 'ghost' }, { label: 'Save', kind: 'primary', onClick: () => {
           if (!what.value.trim()) { U.toast('Please type what to check'); return false; }
           it.no = no.value.trim(); it.what = what.value.trim(); it.how = how.value.trim();
+          if (own.checked) {
+            it.ans = [...new Set(ansT.value.split('\n').map((x) => x.trim()).filter(Boolean))];
+            it.work = workT.value.split('\n').map((x) => x.trim()).filter((x) => x && it.ans.includes(x));
+          } else { delete it.ans; delete it.work; }
           if (isNew) list.push(it);
           save(); U.rerender();
         } }] });
@@ -325,7 +390,7 @@
     U.modal({ title: 'File ready', body: [h('p', h('b', name + ext)), h('p.muted', U.fmtBytes(blob.size))],
       actions: [
         { label: 'Save file', kind: 'primary', onClick: () => { U.downloadBlob(blob, name + ext); U.toast('Saved to Downloads', 3500); return false; } },
-        U.canShareFiles() ? { label: 'Share / Send', onClick: async () => { await U.shareBlob(blob, name + ext, blob.type || 'application/octet-stream'); return false; } } : null,
+        U.sendAction(blob, name + ext, blob.type || 'application/octet-stream', false, ''),
         { label: 'Close', kind: 'ghost' },
       ].filter(Boolean) });
     return true;
@@ -333,7 +398,7 @@
 
   U.backupFlow = async (ids, label) => {
     if (!ids.length) { U.toast('No school to back up yet'); return; }
-    const name = U.safeFileName(`CivilOS Upgrades backup - ${label} - ${U.isoDate()}`);
+    const name = U.safeFileName(`Infra Upgrades backup - ${label} - ${U.isoDate()}`);
     let handle = false;
     if (U.canPickFolder()) {
       handle = await U.pickSaveTarget(name, 'backup');
@@ -353,7 +418,7 @@
     U.modal({ title: 'Backup ready', body: [h('p', h('b', fn)), h('p.muted', U.fmtBytes(blob.size)), h('p.small.muted', 'Save it to Downloads, or Share it to Google Drive / your laptop. Keep it until the work is finished.')],
       actions: [
         { label: 'Save file', kind: 'primary', onClick: () => { U.downloadBlob(blob, fn); U.toast('Saved to Downloads', 3500); return false; } },
-        U.canShareFiles() ? { label: 'Share / Send', onClick: async () => { await U.shareBlob(blob, fn, 'application/octet-stream'); return false; } } : null,
+        U.sendAction(blob, fn, 'application/octet-stream', false, ''),
         { label: 'Close', kind: 'ghost' },
       ].filter(Boolean), onClose: () => U.rerender() });
   };
@@ -386,7 +451,7 @@
 
   /* ================= HELP ================= */
   U.screens.help = (root) => {
-    root.append(U.topbar({ back: '/', title: 'Help', sub: 'How to use CivilOS Upgrades' }));
+    root.append(U.topbar({ back: '/', title: 'Help', sub: 'How to use Infra Upgrades' }));
     const page = h('main.page.help');
     root.append(page);
     page.append(h('div.card',
@@ -411,7 +476,7 @@
         h('li', 'Open the app link in Google Chrome. Tap ⋮ › “Install app” (or “Add to Home screen”).'),
         h('li', 'After the first open, it works fully offline — no internet needed at the school.'),
         h('li', 'Allow Camera and Location when asked. Turn on phone GPS for coordinates on photos.'))),
-      h('div.footer-note', `CivilOS Upgrades · version ${self.CU_VERSION || ''}`));
+      h('div.footer-note', `Infra Upgrades · version ${self.CU_VERSION || ''}`));
   };
 
   /* ================= LOCK ================= */
@@ -434,7 +499,7 @@
     const schools = await U.DB.schools().catch(() => []);
     root.append(h('div.lock',
       h('img.big-logo', { src: U.LOGO, alt: '' }),
-      h('h1', 'CivilOS Upgrades'),
+      h('h1', 'Infra Upgrades'),
       h('div.tag', 'School survey · Civil, MEP & infrastructure'),
       h('div.card',
         h('h2', first ? 'Activate the app' : done ? 'All codes used' : 'The 30 days are over'),

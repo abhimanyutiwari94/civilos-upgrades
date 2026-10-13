@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — Word (.docx) writer. Opens in Microsoft Word, WPS and Google Docs. */
+/* Infra Upgrades — Word (.docx) writer. Opens in Microsoft Word, WPS and Google Docs. */
 (function () {
   'use strict';
   const U = self.U;

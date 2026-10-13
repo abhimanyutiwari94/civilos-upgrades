@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — 30-day activation.
+/* Infra Upgrades — 30-day activation.
    Code 1 opens the app for 30 days from the day it is typed. After that the app locks
    (data stays safe) until the next code is typed. Codes work only in order.
    Setting the phone's date back does not help: the app remembers the latest date it saw. */

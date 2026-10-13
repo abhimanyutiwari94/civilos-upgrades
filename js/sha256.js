@@ -1,4 +1,4 @@
-/* CivilOS Upgrades — small SHA-256 (pure JS, works offline and on file://).
+/* Infra Upgrades — small SHA-256 (pure JS, works offline and on file://).
    Used only to check activation codes against stored fingerprints. */
 (function (root) {
   'use strict';

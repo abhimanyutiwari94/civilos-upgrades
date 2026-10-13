@@ -1,8 +1,8 @@
-/* CivilOS Upgrades — start-up, screen switching (Android back button works), lock check. */
+/* Infra Upgrades — start-up, screen switching (Android back button works), lock check. */
 (function () {
   'use strict';
   const U = self.U, S = U.S, h = U.h;
-  self.CU_VERSION = '1.3.1';
+  self.CU_VERSION = '1.4.0';
   let root = null;
   const scrolls = new Map();
   let curKey = '';
@@ -61,6 +61,14 @@
       'In the camera: “Remove last photo” undoes a blurred or wrong shot.',
       '“Select to remove” under the photos: remove several photos at once.',
       'Removed photos stay in “Recently deleted” (school menu) until you delete them for ever.'],
+    '1.4.0': ['New name: Infra Upgrades.',
+      'Answers that fit the question: e.g. “Can material vehicles reach?” → Yes / Small vehicles only / No. Condition questions keep Good / Repair / Replace.',
+      'Each kind of space asks its own boxes: toilets ask WC, urinals, basins (with a toilet checklist); open areas ask length × breadth; walls ask length × height.',
+      '“✎ Edit list” next to “+ Add”: rename, remove or move choices (e.g. Work needed).',
+      'Work quantities (Settings › Work quantities): plaster, painting, waterproofing, rebuild … per room with sizes; school totals; Excel with formulas; quantity sheet alone in PDF / Word / Excel.',
+      'Share / Send: PDF shares directly; for Word / Excel the app shows how to send from WhatsApp or email.',
+      'More accurate GPS: the app waits a moment for a good reading and shows its accuracy (±m).',
+      'Slimmer top bar on phones; tabs scroll away to give more room.'],
   };
   function showWhatsNew() {
     let seen = '';
@@ -82,7 +90,7 @@
       if (n) await U.refreshSchools();
     } catch (e) {
       U.clear(root);
-      root.append(h('div.lock', h('img.big-logo', { src: U.LOGO, alt: '' }), h('h1', 'CivilOS Upgrades'),
+      root.append(h('div.lock', h('img.big-logo', { src: U.LOGO, alt: '' }), h('h1', 'Infra Upgrades'),
         h('div.card', h('h2', 'Storage is not available'),
           h('p', 'This page cannot save data here. Please open the app link in Google Chrome (not inside WhatsApp or a file viewer), then install it with ⋮ › Install app.'),
           h('p.small.muted', String(e && e.message || e)))));
