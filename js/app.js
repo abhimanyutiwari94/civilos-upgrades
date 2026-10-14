@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const U = self.U, S = U.S, h = U.h;
-  self.CU_VERSION = '1.4.0';
+  self.CU_VERSION = '1.4.1';
   let root = null;
   const scrolls = new Map();
   let curKey = '';
@@ -69,6 +69,7 @@
       'Share / Send: PDF shares directly; for Word / Excel the app shows how to send from WhatsApp or email.',
       'More accurate GPS: the app waits a moment for a good reading and shows its accuracy (±m).',
       'Slimmer top bar on phones; tabs scroll away to give more room.'],
+    '1.4.1': ['Install help on the first screen: one-tap Install in Chrome, Open in Chrome from WhatsApp / Samsung Internet, iPhone steps.'],
   };
   function showWhatsNew() {
     let seen = '';

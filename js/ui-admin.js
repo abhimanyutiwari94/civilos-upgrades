@@ -501,6 +501,7 @@
       h('img.big-logo', { src: U.LOGO, alt: '' }),
       h('h1', 'Infra Upgrades'),
       h('div.tag', 'School survey · Civil, MEP & infrastructure'),
+      U.isInstalled() ? null : U.installCard(),
       h('div.card',
         h('h2', first ? 'Activate the app' : done ? 'All codes used' : 'The 30 days are over'),
         h('p.muted', first ? 'Type Code 1 to open the app for 30 days.'
@@ -509,6 +510,48 @@
         U.Lock.clockWentBack() ? h('div.banner.warn', U.icon('info'), h('div', 'The phone date looks earlier than before. Please set the correct date and time.')) : null,
         done ? null : [inp, msg, btn],
         schools.length && !first ? h('button.btn.ghost.block', { style: { marginTop: '8px' }, onclick: () => U.backupFlow(schools.map((s) => s.id), 'All schools') }, U.icon('save'), 'Save a backup of my data') : null)));
-    setTimeout(() => inp.focus(), 100);
+    if (!U.isInstalled()) setTimeout(() => inp.focus(), 100);
+  };
+
+  /* ================= INSTALL HELP =================
+     People often open the link inside WhatsApp or Samsung Internet, where "Install" is not offered.
+     This card gives a one-tap Install in Chrome, an "Open in Chrome" button elsewhere, and iPhone steps. */
+  let deferredInstall = null;
+  self.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; document.querySelectorAll('.install-now').forEach((b) => { b.hidden = false; }); });
+  self.addEventListener('appinstalled', () => { deferredInstall = null; document.querySelectorAll('.install-card').forEach((c) => c.remove()); U.toast('App installed — open it from the home screen'); });
+  U.isInstalled = () => (self.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  U.browserKind = () => {
+    const ua = navigator.userAgent || '';
+    if (/iPhone|iPad|iPod/i.test(ua)) return /CriOS/i.test(ua) ? 'ios-chrome' : 'ios';
+    if (/SamsungBrowser/i.test(ua)) return 'samsung';
+    if (/WhatsApp|FBAN|FBAV|Instagram|Line\/|; wv\)|Telegram/i.test(ua)) return 'inapp';
+    if (/Android/i.test(ua) && /Chrome\//i.test(ua) && !/EdgA|OPR|Firefox|MiuiBrowser|HeyTap|UCBrowser|YaBrowser/i.test(ua)) return 'chrome';
+    if (/Android/i.test(ua)) return 'other-android';
+    return 'desktop';
+  };
+  U.appLink = () => location.origin + location.pathname.replace(/index\.html$/, '');
+  U.installCard = () => {
+    if (U.isInstalled()) return null;
+    const kind = U.browserKind();
+    const link = U.appLink();
+    const chromeIntent = `intent://${link.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;end`;
+    const copy = h('button.btn.ghost.small', { onclick: async () => { try { await navigator.clipboard.writeText(link); U.toast('Link copied'); } catch (e) { U.promptText('Copy this link', link); } } }, U.icon('copy'), 'Copy link');
+    const installBtn = h('button.btn.primary.block.install-now', { hidden: !deferredInstall, onclick: async () => {
+      if (!deferredInstall) { U.alert('In Chrome tap ⋮ (top right) › “Install app” or “Add to Home screen”.', 'Install'); return; }
+      deferredInstall.prompt();
+      try { await deferredInstall.userChoice; } catch (e) { /* */ }
+      deferredInstall = null;
+    } }, U.icon('download'), 'Install app');
+    let steps;
+    if (kind === 'chrome') steps = [installBtn, h('ol.small', h('li', 'If the button does not appear: tap ⋮ (top right in Chrome) › “Install app” or “Add to Home screen”.'), h('li', 'Then open Infra Upgrades from the home screen.'))];
+    else if (kind === 'ios' || kind === 'ios-chrome') steps = [h('ol.small', h('li', kind === 'ios-chrome' ? 'Open this link in Safari.' : 'Tap the Share button (square with arrow) at the bottom.'), h('li', '“Add to Home Screen” › Add.'), h('li', 'Open Infra Upgrades from the home screen.'))];
+    else if (kind === 'desktop') steps = [installBtn, h('p.small.muted', 'On a computer, Chrome or Edge shows an install icon in the address bar.')];
+    else steps = [h('p.small', kind === 'samsung' ? 'Samsung Internet cannot install this app. Please open it in Google Chrome:' : 'This link opened inside another app (e.g. WhatsApp), where apps cannot be installed. Please open it in Google Chrome:'),
+      h('a.btn.primary.block', { href: chromeIntent }, U.icon('share'), 'Open in Chrome'),
+      h('ol.small', h('li', 'In Chrome tap “Install app” (or ⋮ › Install app / Add to Home screen).'), h('li', 'If “Open in Chrome” does not work: tap ⋮ › “Open in Chrome” / “Open in browser”, or copy the link into Chrome.'))];
+    return h('div.card.install-card', { style: { textAlign: 'left', marginBottom: '12px', width: 'min(420px, 100%)' } },
+      h('h2', 'Install the app on this phone'),
+      h('p.small.muted', 'Install first, then open it from the home screen and type the code. The installed app works without internet and keeps data safe.'),
+      ...steps, h('div.row', { style: { marginTop: '6px' } }, copy, h('span.small.muted.ellipsis', link)));
   };
 })();

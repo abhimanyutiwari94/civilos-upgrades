@@ -410,3 +410,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .qty-table td { border-bottom: 1px solid var(--line); padding: 6px; vertical-align: top; }
 .qty-table td.num { text-align: right; font-weight: 700; white-space: nowrap; }
 .qty-table tr.cat td { background: #f28120; color: #fff; font-weight: 700; }
+
+a.btn { text-decoration: none; }
+.install-card ol { margin: 8px 0 0; padding-left: 20px; }
+.install-card .btn.block { margin: 6px 0; }

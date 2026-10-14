@@ -20,9 +20,7 @@
     const left = U.Lock.daysLeft();
     if (left <= 5) page.append(h('div.banner.warn', U.icon('lock'), h('div', `The app will lock in ${left} day${left === 1 ? '' : 's'} (${U.fmtDate(U.Lock.state().until)}). Ask for Code ${U.Lock.state().used + 1} and type it in Settings › Activation. Your data stays safe.`)));
     const info = await U.storageInfo();
-    if (!info.persisted && S.schools.length) {
-      page.append(h('div.banner.info', U.icon('info'), h('div', 'Tip: install this app on the home screen (browser menu › Install app / Add to Home screen). Installed apps keep data safest.')));
-    }
+    if (!U.isInstalled()) { const ic = U.installCard(); if (ic) page.append(ic); }
     const lastB = (await U.DB.kvGet('lastBackup')) || 0;
     const unsaved = S.schools.filter((s) => (s.updated || 0) > lastB && (s.photoCount || 0) > 0);
     if (unsaved.length) {
