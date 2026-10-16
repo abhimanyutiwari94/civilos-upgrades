@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const U = self.U, S = U.S, h = U.h;
-  self.CU_VERSION = '1.4.2';
+  self.CU_VERSION = '1.4.3';
   let root = null;
   const scrolls = new Map();
   let curKey = '';
@@ -74,6 +74,8 @@
     '1.4.2': ['Accurate geo-tags: GPS starts as soon as you open a school; photos wait up to 10 s for the accuracy you choose (Settings › Photos: ±5 / ±10 / ±20 m).',
       'If the phone gives only approximate location (±1–3 km), a red warning shows how to turn on “Use precise location”.',
       'Good readings are averaged for a steadier position; a photo that could not get the accuracy is marked “approx.” in reports.'],
+    '1.4.3': ['Much faster and smoother on every phone: photos save in the background (camera never freezes), photo previews load as you scroll, long pages draw only what is on screen.',
+      'Light mode for low-cost phones (automatic, or Settings › Speed): simpler drawing, lighter camera preview, photos kept at 2048 px.'],
   };
   function showWhatsNew() {
     let seen = '';
@@ -91,6 +93,7 @@
       await U.DB.open();
       await U.loadAll();
       await U.Lock.load();
+      document.body.classList.toggle('lite', U.lite());
       const n = await U.recoverMirrors();
       if (n) await U.refreshSchools();
     } catch (e) {

@@ -415,3 +415,18 @@ a.btn { text-decoration: none; }
 .install-card ol { margin: 8px 0 0; padding-left: 20px; }
 .install-card .btn.block { margin: 6px 0; }
 .cam-gpswarn { position: relative; z-index: 2; margin: 8px 12px 0; padding: 10px 12px; border: 0; border-radius: 12px; background: #b3261e; color: #fff; font-weight: 700; font-size: 13.5px; text-align: left; }
+
+/* ---- smooth on every phone ----
+   Off-screen parts of long pages are not drawn until they scroll near (big saving on low-cost phones). */
+.list-card, .acc, .item, .photo-group, .qty-line, .ed-item, .pv-page, main.page > .card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 140px;
+}
+.acc.open { contain-intrinsic-size: auto 900px; }
+.thumb img, .list-card .pic img { background: #efe4d8; }
+/* Light mode (chosen automatically on low-memory phones, or in Settings › Speed): simpler drawing */
+body.lite .card, body.lite .acc, body.lite .list-card, body.lite .modal, body.lite .fab, body.lite .top { box-shadow: none; }
+body.lite .top { background: var(--saffron); }
+body.lite *, body.lite *::before, body.lite *::after { transition: none !important; animation-duration: 0.01ms !important; }
+body.lite .bar i { background: var(--saffron); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation-duration: 0.01ms !important; } }

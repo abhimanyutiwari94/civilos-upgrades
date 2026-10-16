@@ -8,13 +8,15 @@
   /* ---------- top bar with live "Saved" state ---------- */
   U.topbar = ({ back, title, sub, actions, logo, onTitle }) => {
     const dot = h('span.save-dot', { title: 'Saved on this phone' }, '✓');
+    let last = '';
     const upd = () => {
-      if (S.saveError) { dot.textContent = '!'; dot.title = 'Not saved yet — retrying'; dot.classList.add('err'); return; }
-      dot.classList.remove('err');
-      const busy = U.isDirty();
-      dot.textContent = busy ? '…' : '✓';
-      dot.title = busy ? 'Saving…' : 'Saved on this phone';
-      dot.classList.toggle('busy', busy);
+      const state = S.saveError ? 'err' : U.isDirty() ? 'busy' : 'ok';
+      if (state === last) return; // nothing to redraw (typing stays smooth)
+      last = state;
+      dot.textContent = state === 'err' ? '!' : state === 'busy' ? '…' : '✓';
+      dot.title = state === 'err' ? 'Not saved yet — retrying' : state === 'busy' ? 'Saving…' : 'Saved on this phone';
+      dot.classList.toggle('err', state === 'err');
+      dot.classList.toggle('busy', state === 'busy');
     };
     const off = U.onSaveState(upd);
     upd();
@@ -319,7 +321,7 @@
       if (!selecting) box.appendChild(h('button.add-photo', { type: 'button', onclick: () => U.takePhotos(school, target, place(), caption, changed) }, U.icon('camera'), 'Add photo'));
       const list = U.photosFor(target);
       for (const p of list) {
-        const img = h('img', { alt: U.photoNo(p), loading: 'lazy' });
+        const img = U.lazyImg(h('img', { alt: U.photoNo(p) }), p.id);
         const tick = h('span.pick', U.icon('check'));
         const t = h('button.thumb' + (chosen.has(p.id) ? '.picked' : ''), { type: 'button', onclick: () => {
           if (!selecting) { U.viewPhoto(list, list.indexOf(p), changed); return; }
@@ -328,7 +330,6 @@
           drawBar(list.length);
         } }, img, h('span.no', U.photoNo(p)), selecting ? tick : null);
         box.appendChild(t);
-        U.thumbURL(p.id).then((u) => { img.src = u; });
       }
       if (selecting && !list.length) selecting = false;
       drawBar(list.length);

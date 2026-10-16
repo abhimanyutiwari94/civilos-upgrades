@@ -44,6 +44,39 @@
   };
   U.clear = (el) => { while (el.firstChild) el.removeChild(el.firstChild); return el; };
 
+  /* Light mode for low-cost phones: chosen automatically from the phone's memory / processor,
+     or set in Settings › Speed. Lighter drawing, smaller live preview, photos kept at 2048 px. */
+  U.lite = () => {
+    const m = (U.S && U.S.settings && U.S.settings.perf) || 'auto';
+    if (m === 'lite') return true;
+    if (m === 'full') return false;
+    const mem = navigator.deviceMemory || 4, cores = navigator.hardwareConcurrency || 8;
+    return mem <= 3 || cores <= 4;
+  };
+  U.photoMaxSide = () => {
+    const v = (U.S && U.S.settings && U.S.settings.photo.maxSide) || 2560;
+    return U.lite() ? Math.min(v, 2048) : v;
+  };
+  /* Photo previews load only when they scroll near the screen (150 at once made phones hang). */
+  let io = null;
+  const lazyQueue = new Map();
+  U.lazyImg = (img, id) => {
+    img.decoding = 'async';
+    if (!self.IntersectionObserver) { U.thumbURL(id).then((u) => { img.src = u; }); return img; }
+    if (!io) io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        io.unobserve(e.target);
+        const pid = lazyQueue.get(e.target);
+        lazyQueue.delete(e.target);
+        if (pid) U.thumbURL(pid).then((u) => { e.target.src = u; });
+      }
+    }, { rootMargin: '400px 0px' });
+    lazyQueue.set(img, id);
+    io.observe(img);
+    return img;
+  };
+
   U.uid = (p) => (p || '') + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   U.debounce = (fn, ms) => {
     let t = 0;

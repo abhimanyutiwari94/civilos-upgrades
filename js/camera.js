@@ -107,7 +107,36 @@
   }
 
   /* blob -> stamped JPEG. lines: array of short strings (bottom-left). */
+  /* Stamping runs in a background worker when the phone supports it, so the screen never freezes.
+     If the worker is not available (or fails once), the same work is done here, as before. */
+  let worker = null, wid = 0;
+  const waits = new Map();
+  const getWorker = () => {
+    if (worker === false) return null;
+    if (worker) return worker;
+    try {
+      if (typeof OffscreenCanvas === 'undefined' || !self.Worker || location.protocol === 'file:') { worker = false; return null; }
+      worker = new Worker('js/stamp-worker.js');
+      worker.onmessage = (e) => { const w = waits.get(e.data.id); if (!w) return; waits.delete(e.data.id); if (e.data.error) w.rej(new Error(e.data.error)); else w.res(e.data); };
+      worker.onerror = () => { worker = false; waits.forEach((w) => w.rej(new Error('worker'))); waits.clear(); };
+    } catch (e) { worker = false; }
+    return worker || null;
+  };
   U.stampPhoto = async (blob, lines, opt) => {
+    opt = opt || {};
+    const w = getWorker();
+    if (w) {
+      try {
+        return await new Promise((res, rej) => {
+          const id = ++wid;
+          waits.set(id, { res, rej });
+          w.postMessage({ id, blob, lines: lines || [], maxSide: opt.maxSide, quality: opt.quality, size: opt.size });
+        });
+      } catch (e) { /* fall back to the main thread below */ }
+    }
+    return stampMain(blob, lines, opt);
+  };
+  const stampMain = async (blob, lines, opt) => {
     opt = opt || {};
     const img = await U.decodeImage(blob);
     const w0 = img.width, h0 = img.height;
@@ -300,7 +329,7 @@
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           audio: false,
-          video: { facingMode: { ideal: facing }, width: { ideal: 4096 }, height: { ideal: 3072 } },
+          video: U.lite() ? { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 960 } } : { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } },
         });
       } catch (e) {
         try { stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: facing } }); } catch (e2) {
@@ -366,7 +395,15 @@
         try {
           const o = {};
           const pc = photoCaps;
-          if (pc && pc.imageWidth && pc.imageWidth.max) { o.imageWidth = pc.imageWidth.max; if (pc.imageHeight && pc.imageHeight.max) o.imageHeight = pc.imageHeight.max; }
+          if (pc && pc.imageWidth && pc.imageWidth.max) {
+            const want = U.photoMaxSide();
+            const r = pc.imageWidth, st = r.step || 1;
+            let iw = Math.min(r.max, Math.max(r.min || 0, want));
+            iw = Math.round(iw / st) * st;
+            if (iw < want && iw + st <= r.max) iw += st;
+            o.imageWidth = iw;
+            if (pc.imageHeight && pc.imageHeight.max && r.max) o.imageHeight = Math.round((iw * pc.imageHeight.max) / r.max);
+          }
           if (torch && pc && (pc.fillLightMode || []).includes('flash')) o.fillLightMode = 'flash';
           return await withTimeout(ic.takePhoto(o), 4000);
         } catch (e) { stillOK = false; /* use the burst below from now on */ }
@@ -394,17 +431,21 @@
     async function burstSharpest() {
       const vw = video.videoWidth, vh = video.videoHeight;
       if (!vw || !vh) throw new Error('Camera is not ready yet');
+      const n = U.lite() ? 1 : 3;
       let best = null, bestScore = -1;
-      for (let k = 0; k < 4; k++) {
-        const c = document.createElement('canvas');
-        c.width = vw; c.height = vh;
-        c.getContext('2d').drawImage(video, 0, 0, vw, vh);
-        const sc = sharpness(c, vw, vh);
-        if (sc > bestScore) { if (best) best.width = best.height = 0; best = c; bestScore = sc; } else c.width = c.height = 0;
-        if (k < 3) await U.sleep(70);
+      for (let k = 0; k < n; k++) {
+        const bm = self.createImageBitmap ? await createImageBitmap(video) : null;
+        const src = bm || video;
+        const sc = n > 1 ? sharpness(src, vw, vh) : 0;
+        if (sc > bestScore || !best) { if (best && best.close) best.close(); best = bm || 'video'; bestScore = sc; } else if (bm) bm.close();
+        if (k < n - 1) await U.sleep(70);
       }
-      const b = await U.canvasToBlob(best, 'image/jpeg', 0.95);
-      best.width = best.height = 0;
+      const c = document.createElement('canvas');
+      c.width = vw; c.height = vh;
+      c.getContext('2d').drawImage(best === 'video' ? video : best, 0, 0, vw, vh);
+      if (best && best.close) best.close();
+      const b = await U.canvasToBlob(c, 'image/jpeg', 0.92);
+      c.width = c.height = 0;
       return b;
     }
     /* tap the picture to focus there */
@@ -434,7 +475,7 @@
         try {
           const fix = await fixP;
           if (!fixOverride && (!fix || fix.acc > U.gpsTarget())) U.toast(fix ? `GPS was ±${Math.round(fix.acc)} m for this photo (wanted ±${U.gpsTarget()} m). It is marked approximate.` : 'No GPS for this photo — check Location is on.', 4500);
-          const r = await U.stampPhoto(blob, U.stampLines(place, fix, ts), { maxSide: st.maxSide, quality: st.quality, size: st.stampSize });
+          const r = await U.stampPhoto(blob, U.stampLines(place, fix, ts), { maxSide: U.photoMaxSide(), quality: st.quality, size: st.stampSize });
           const meta = await opts.onSave(Object.assign(r, { fix, ts, tag: thisTag, place, source }));
           count++;
           if (meta && meta.id) taken.push({ id: meta.id, url: URL.createObjectURL(r.thumb) });
@@ -505,7 +546,7 @@
     for (const f of files) {
       const fix = await Geo.good(10000) || (await Geo.once(10000));
       const r = await U.stampPhoto(f, U.stampLines(opts.place(), fix, Date.now()),
-        { maxSide: U.S.settings.photo.maxSide, quality: U.S.settings.photo.quality, size: U.S.settings.photo.stampSize });
+        { maxSide: U.photoMaxSide(), quality: U.S.settings.photo.quality, size: U.S.settings.photo.stampSize });
       await opts.onSave(Object.assign(r, { fix, ts: Date.now(), tag: '', place: opts.place(), source: 'phone' }));
       n++;
     }

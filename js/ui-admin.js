@@ -63,6 +63,17 @@
     const sizeSeg = h('div.seg');
     const drawSize = () => { U.clear(sizeSeg); [['small', 'Very small'], ['medium', 'Medium']].forEach(([k, l]) => sizeSeg.append(h('button' + (p.stampSize === k ? '.on' : ''), { onclick: () => { p.stampSize = k; save(); drawSize(); } }, l))); };
     drawSize();
+    /* speed: light mode for low-cost phones */
+    const perfSeg = h('div.seg');
+    const drawPerf = () => {
+      U.clear(perfSeg);
+      [['auto', 'Automatic'], ['lite', 'Light (fast)'], ['full', 'Full']].forEach(([k, l]) => perfSeg.append(h('button' + ((st.perf || 'auto') === k ? '.on' : ''), { onclick: () => { st.perf = k; save(); document.body.classList.toggle('lite', U.lite()); drawPerf(); } }, l)));
+    };
+    drawPerf();
+    page.append(h('div.card',
+      h('h2', 'Speed'),
+      h('div.field', perfSeg),
+      h('p.small.muted', `Light mode makes the app smoother on low-cost phones: simpler drawing, lighter camera preview, photos kept at 2048 px (still sharp, smaller files). Automatic picks Light on phones with little memory. This phone: ${U.lite() ? 'Light' : 'Full'} now${navigator.deviceMemory ? ` · about ${navigator.deviceMemory} GB memory` : ''}.`)));
     page.append(h('div.card',
       h('h2', 'Photos'),
       h('div.field', h('div.lbl', 'Photo quality'), qual),

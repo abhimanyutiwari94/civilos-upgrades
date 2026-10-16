@@ -44,8 +44,7 @@
       else if (b.t === 'photos') {
         const grid = h('div.pv-photos', { style: { gridTemplateColumns: `repeat(${rep.perRow || 2}, 1fr)` } });
         for (const p of b.items) {
-          const img = h('img', { alt: '', loading: 'lazy' });
-          U.thumbURL(p.id).then((u) => { img.src = u; });
+          const img = U.lazyImg(h('img', { alt: '' }), p.id);
           grid.append(h('figure', h('div.pv-imgbox', img), h('figcaption', h('b', U.photoCaption(p)), h('span', U.photoSub(p)))));
         }
         add(grid);

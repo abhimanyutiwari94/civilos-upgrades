@@ -63,6 +63,12 @@
     photosOf: (schoolId) => tx(['photos'], 'readonly', (t) => req(t.objectStore('photos').index('school').getAll(schoolId))),
     /* Photo meta without loading every full image into memory at once is not possible
        with getAll, so list screens use thumbs; full images are read one by one. */
+    /* the first live photo of a school, read with a cursor (no need to load every photo) */
+    firstPhoto: (schoolId) => tx(['photos'], 'readonly', (t) => new Promise((res, rej) => {
+      const rq = t.objectStore('photos').index('school').openCursor(IDBKeyRange.only(schoolId));
+      rq.onsuccess = () => { const c = rq.result; if (!c) { res(null); return; } if (!c.value.deleted) { const v = Object.assign({}, c.value); delete v.blob; res(v); return; } c.continue(); };
+      rq.onerror = () => rej(rq.error);
+    })),
     photo: (id) => tx(['photos'], 'readonly', (t) => req(t.objectStore('photos').get(id))),
     thumb: (id) => tx(['thumbs'], 'readonly', (t) => req(t.objectStore('thumbs').get(id))),
     putPhoto: (p, thumb) => tx(['photos', 'thumbs'], 'readwrite', (t) => {

@@ -99,8 +99,8 @@
   const firstThumbCache = new Map();
   U.firstPhotoThumb = async (schoolId) => {
     if (firstThumbCache.has(schoolId)) return firstThumbCache.get(schoolId);
-    const ph = (await U.DB.photosOf(schoolId)).filter((p) => !p.deleted).sort((a, b) => (a.no || 0) - (b.no || 0));
-    const u = ph.length ? await U.thumbURL(ph[0].id) : '';
+    const first = await U.DB.firstPhoto(schoolId); // reads one photo, not all of them
+    const u = first ? await U.thumbURL(first.id) : '';
     firstThumbCache.set(schoolId, u);
     return u;
   };
@@ -263,7 +263,7 @@
             h('div.meta.ellipsis', [U.T.type(sp.typeId).label, U.spaceWhere(sp)].filter(Boolean).join(' · ')),
             h('div.meta', [`${ph.length} photo${ph.length === 1 ? '' : 's'}`, checked, sp.data && sp.data.sp_len && sp.data.sp_bre ? `${sp.data.sp_len} × ${sp.data.sp_bre} m` : ''].filter(Boolean).join('  ·  ')),
             wt.length ? h('div', { style: { marginTop: '5px' } }, wt.slice(0, 4).map((w) => h('span.pill' + (w === 'Rebuild' ? '.bad' : w === 'No work' ? '.ok' : ''), w)), wt.length > 4 ? h('span.small.muted', '+' + (wt.length - 4)) : null) : null))));
-      if (ph.length) U.thumbURL(ph.sort((a, b) => a.no - b.no)[0].id).then((u) => { if (u) { U.clear(pic); pic.append(h('img', { src: u, alt: '' })); } });
+      if (ph.length) { const im = U.lazyImg(h('img', { alt: '' }), ph.sort((a, b) => a.no - b.no)[0].id); U.clear(pic); pic.append(im); }
     });
     if (spaces.length > 1) {
       page.append(h('button.btn.ghost.small', { style: { marginTop: '4px' }, onclick: () => U.reorderSpaces(s) }, U.icon('up'), 'Change order'));

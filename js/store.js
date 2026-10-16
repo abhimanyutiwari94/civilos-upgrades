@@ -52,6 +52,7 @@
       gpsTarget: 20, // metres: photos wait for this accuracy (5 / 10 / 20)
     },
     roomExport: { what: 'report', fmt: 'pdf', separate: false, data: true, remarks: true },
+    perf: 'auto', // speed: 'auto' | 'lite' (light phones) | 'full'
     lastFormat: 'pdf',
     lastSaveFolderHint: '',
   });

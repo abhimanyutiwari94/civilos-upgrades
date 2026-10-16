@@ -1,10 +1,10 @@
 /* Infra Upgrades — offline engine. After the first open, the app works with no internet. */
-const VERSION = 'cu-1.4.2-202610160759';
+const VERSION = 'cu-1.4.3-202610161408';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/logo.svg', 'icons/sakshham-logo.png', 'icons/sakshham-logo.jpg',
   'js/sha256.js', 'js/codes.js', 'js/template.js', 'js/util.js', 'js/db.js', 'js/store.js', 'js/lock.js',
-  'js/camera.js', 'js/zip.js', 'js/report.js', 'js/pdf.js', 'js/docx.js', 'js/xlsx.js', 'js/backup.js', 'js/export-rooms.js', 'js/preview.js', 'js/qty.js',
+  'js/camera.js', 'js/stamp-worker.js', 'js/zip.js', 'js/report.js', 'js/pdf.js', 'js/docx.js', 'js/xlsx.js', 'js/backup.js', 'js/export-rooms.js', 'js/preview.js', 'js/qty.js',
   'js/ui-common.js', 'js/ui-school.js', 'js/ui-admin.js', 'js/app.js',
 ];
 self.addEventListener('install', (e) => {
