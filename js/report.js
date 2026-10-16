@@ -85,7 +85,7 @@
     return '';
   };
   U.photoCaption = (p, s) => [U.photoNo(p), p.caption || U.targetLabel(s, p.target), p.tag || ''].filter(Boolean).join(' · ');
-  U.photoSub = (p) => [p.lat != null ? U.fmtLatLng(p.lat, p.lng) + (p.acc != null ? ` (±${Math.round(p.acc)} m)` : '') : 'No GPS', U.fmtDateTime(p.ts)].join('  ·  ');
+  U.photoSub = (p) => [p.lat != null ? U.fmtLatLng(p.lat, p.lng) + (p.acc != null ? ` (${p.approx ? 'approx. ' : ''}±${Math.round(p.acc)} m)` : '') : 'No GPS', U.fmtDateTime(p.ts)].join('  ·  ');
 
   /* ---------- build the report as simple blocks ---------- */
   U.buildReport = (school, photos, o) => {

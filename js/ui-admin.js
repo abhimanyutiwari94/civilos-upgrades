@@ -57,6 +57,9 @@
     const drawCam = () => { U.clear(camSeg); [['app', 'In-app camera (fast, many photos)'], ['phone', 'Phone camera app']].forEach(([k, l]) => camSeg.append(h('button' + (p.camera === k ? '.on' : ''), { onclick: () => { p.camera = k; save(); drawCam(); } }, l))); };
     drawCam();
     const psw = (key, label, sub) => { const c = h('input', { type: 'checkbox', checked: !!p[key] }); c.addEventListener('change', () => { p[key] = c.checked; save(); }); return h('label.switch', h('span', label, sub ? h('div.small.muted', sub) : null), c); };
+    const gpsSeg = h('div.seg');
+    const drawGps = () => { U.clear(gpsSeg); [[5, '±5 m (best, slower)'], [10, '±10 m'], [20, '±20 m (faster)']].forEach(([k, l]) => gpsSeg.append(h('button' + (Number(p.gpsTarget || 20) === k ? '.on' : ''), { onclick: () => { p.gpsTarget = k; save(); drawGps(); } }, l))); };
+    drawGps();
     const sizeSeg = h('div.seg');
     const drawSize = () => { U.clear(sizeSeg); [['small', 'Very small'], ['medium', 'Medium']].forEach(([k, l]) => sizeSeg.append(h('button' + (p.stampSize === k ? '.on' : ''), { onclick: () => { p.stampSize = k; save(); drawSize(); } }, l))); };
     drawSize();
@@ -69,7 +72,9 @@
       psw('stampSchool', 'Add school name to the location name'),
       psw('stampCoords', 'GPS coordinates'),
       psw('stampTime', 'Date and time', 'Off by default'),
-      h('div.field', { style: { marginTop: '8px' } }, h('div.lbl', 'Stamp size'), sizeSeg)));
+      h('div.field', { style: { marginTop: '8px' } }, h('div.lbl', 'Stamp size'), sizeSeg),
+      h('div.field', h('div.lbl', 'GPS accuracy for photos'), gpsSeg, h('div.small.muted', { style: { marginTop: '6px' } }, 'The camera waits up to 10 s for this accuracy. Needs phone Location ON with “Use precise location”.')),
+      h('button.btn.soft.small', { onclick: () => U.alert(U.preciseHelp(), 'Get accurate GPS') }, U.icon('pin'), 'How to get accurate GPS')));
 
     /* survey form */
     page.append(h('div.card',

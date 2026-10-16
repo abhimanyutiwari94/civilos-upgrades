@@ -1,5 +1,5 @@
 /* Infra Upgrades — offline engine. After the first open, the app works with no internet. */
-const VERSION = 'cu-1.4.1-202610140414';
+const VERSION = 'cu-1.4.2-202610160759';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/logo.svg', 'icons/sakshham-logo.png', 'icons/sakshham-logo.jpg',

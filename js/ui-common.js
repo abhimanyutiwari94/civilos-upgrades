@@ -129,12 +129,14 @@
       show();
       const btn = h('button.btn.soft.small', { type: 'button', onclick: async () => {
         btn.disabled = true; btn.textContent = 'Finding accurate location…';
-        /* listen up to 20 s and keep the most accurate reading (stops early at ±10 m) */
-        const f = await U.Geo.once(20000, (b) => { btn.textContent = `Improving… ±${Math.round(b.acc)} m`; });
+        /* listen up to 30 s and keep the most accurate reading (stops early at ±5 m) */
+        if (U.Geo.approximate()) U.alert(U.preciseHelp(), 'Turn on precise location');
+        const f = await U.Geo.once(30000, (b) => { btn.textContent = `Improving… ±${Math.round(b.acc)} m`; });
         btn.disabled = false; btn.textContent = 'Use my location now';
         if (!f) { U.toast('Location not found. Turn on GPS / location and try in open sky.'); return; }
         set({ lat: U.round(f.lat, 6), lng: U.round(f.lng, 6), acc: Math.round(f.acc) }); show();
-        if (f.acc > 50) U.toast(`Location is rough (±${Math.round(f.acc)} m). Stand in the open and tap again.`, 5000);
+        if (f.acc >= 1000) U.alert(U.preciseHelp(), 'Turn on precise location');
+        else if (f.acc > U.gpsTarget()) U.toast(`Location is ±${Math.round(f.acc)} m. Stand in the open for 30 s and tap again.`, 5000);
       } }, 'Use my location now');
       const edit = h('button.btn.ghost.small', { type: 'button', onclick: async () => {
         const v = data[fl.id];
@@ -247,7 +249,7 @@
     const p = {
       id: U.uid('p'), schoolId: school.id, target, no: school.photoSeq,
       caption: caption || '', tag: r.tag || '', place: r.place || '',
-      lat: r.fix ? U.round(r.fix.lat, 7) : null, lng: r.fix ? U.round(r.fix.lng, 7) : null, acc: r.fix && r.fix.acc != null ? Math.round(r.fix.acc) : null,
+      lat: r.fix ? U.round(r.fix.lat, 7) : null, lng: r.fix ? U.round(r.fix.lng, 7) : null, acc: r.fix && r.fix.acc != null ? Math.round(r.fix.acc) : null, approx: !r.fix || (r.fix.acc != null && r.fix.acc > U.gpsTarget()),
       ts: r.ts || Date.now(), w: r.w, h: r.h, size: r.blob.size, source: r.source || 'app', blob: r.blob,
     };
     await U.DB.putPhoto(p, r.thumb);

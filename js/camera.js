@@ -5,21 +5,25 @@
   const U = self.U;
   const h = U.h;
 
-  /* ---------------- GPS ---------------- */
-  /* Accurate location: the phone's first answer is often a rough network guess (hundreds of metres).
-     We keep listening to real GPS and always use the most accurate reading of the last 30 seconds;
-     before stamping a photo we wait a moment for a good reading. */
-  const GOOD = 20; // metres
+  /* ---------------- GPS ----------------
+     Accurate location, step by step:
+     • GPS starts as soon as a school is opened (warm-up), so it has locked on before photos are taken.
+     • Only real readings are used (maximumAge 0), the best of the last 30 s.
+     • Readings close to the best one are averaged (weighted by accuracy) for a steadier position.
+     • Before stamping a photo the camera waits up to 10 s for the accuracy chosen in Settings (5 / 10 / 20 m).
+     • A phone that only gives ±1000 m or worse has "Approximate location" on — the app says how to fix it. */
+  const target = () => Number((U.S.settings && U.S.settings.photo && U.S.settings.photo.gpsTarget) || 20);
   const Geo = (U.Geo = {
     fix: null, // most recent {lat,lng,acc,ts}
     recent: [], // readings of the last 30 s
     err: null,
     watchId: null,
     users: 0,
+    startedAt: 0,
     subs: new Set(),
     add(p) {
       const f = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy, ts: Date.now() };
-      if (!isFinite(f.lat) || !isFinite(f.lng)) return;
+      if (!isFinite(f.lat) || !isFinite(f.lng) || !isFinite(f.acc)) return;
       Geo.fix = f;
       Geo.recent = Geo.recent.filter((x) => f.ts - x.ts < 30000).concat(f);
       Geo.err = null;
@@ -28,6 +32,7 @@
     start() {
       Geo.users++;
       if (Geo.watchId != null || !navigator.geolocation) return;
+      Geo.startedAt = Date.now();
       try {
         Geo.watchId = navigator.geolocation.watchPosition((p) => Geo.add(p), (e) => {
           Geo.err = e && e.code === 1 ? 'Location permission is off' : 'Waiting for GPS…';
@@ -39,43 +44,56 @@
       Geo.users = Math.max(0, Geo.users - 1);
       if (Geo.users === 0 && Geo.watchId != null) { navigator.geolocation.clearWatch(Geo.watchId); Geo.watchId = null; }
     },
-    /* best (smallest error) reading of the last 30 s, else the last one if under 3 minutes old */
+    /* the position to use: best reading of the last 30 s, averaged with readings almost as good */
     fresh() {
       const now = Date.now();
       const r = Geo.recent.filter((x) => now - x.ts < 30000);
-      if (r.length) return r.reduce((a, b) => (b.acc < a.acc || (b.acc === a.acc && b.ts > a.ts) ? b : a));
-      return Geo.fix && now - Geo.fix.ts < 3 * 60000 ? Geo.fix : null;
+      if (!r.length) return Geo.fix && now - Geo.fix.ts < 3 * 60000 ? Geo.fix : null;
+      const best = r.reduce((x, y) => (y.acc < x.acc || (y.acc === x.acc && y.ts > x.ts) ? y : x));
+      const near = r.filter((x) => x.acc <= Math.max(best.acc * 1.5, best.acc + 3));
+      if (near.length < 2) return best;
+      let w = 0, lat = 0, lng = 0;
+      for (const x of near) { const k = 1 / (x.acc * x.acc); w += k; lat += x.lat * k; lng += x.lng * k; }
+      return { lat: lat / w, lng: lng / w, acc: best.acc, ts: best.ts, n: near.length };
     },
-    /* wait up to ms for a reading within GOOD metres; returns the best reading seen */
-    good(ms) {
+    /* the phone only gives a rough network position ("Approximate location" is on, or GPS is off) */
+    approximate() {
+      const best = Geo.fresh();
+      return !!best && Date.now() - Geo.startedAt > 8000 && best.acc >= 1000;
+    },
+    /* wait up to ms for a reading within the target; returns the best position seen */
+    good(ms, want) {
+      want = want || target();
       const f = Geo.fresh();
-      if (f && f.acc <= GOOD && Date.now() - f.ts < 15000) return Promise.resolve(f);
+      if (f && f.acc <= want && Date.now() - f.ts < 15000) return Promise.resolve(f);
       return new Promise((res) => {
         const done = () => { Geo.subs.delete(chk); clearTimeout(t); res(Geo.fresh()); };
-        const chk = () => { const x = Geo.fresh(); if (x && x.acc <= GOOD) done(); };
+        const chk = () => { const x = Geo.fresh(); if (x && x.acc <= want) done(); };
         Geo.subs.add(chk);
-        const t = setTimeout(done, ms || 2500);
+        const t = setTimeout(done, ms || 10000);
       });
     },
-    /* a careful single location (school GPS): listen up to timeoutMs, stop early at ≤ 10 m, keep the best */
+    /* a careful single location (school GPS): listen up to timeoutMs, stop early at ±5 m, keep the best */
     once(timeoutMs, onProgress) {
+      Geo.start();
       return new Promise((res) => {
-        if (!navigator.geolocation) { res(null); return; }
-        let best = null, id = null;
-        const finish = () => { if (id != null) navigator.geolocation.clearWatch(id); clearTimeout(t); res(best || Geo.fresh()); };
-        const t = setTimeout(finish, timeoutMs || 15000);
-        try {
-          id = navigator.geolocation.watchPosition((p) => {
-            Geo.add(p);
-            if (!best || p.coords.accuracy < best.acc) best = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy, ts: Date.now() };
-            if (onProgress) onProgress(best);
-            if (best.acc <= 10) finish();
-          }, () => { /* keep waiting until the time is up */ }, { enableHighAccuracy: true, maximumAge: 0, timeout: timeoutMs || 15000 });
-        } catch (e) { finish(); }
+        const finish = () => { Geo.subs.delete(chk); clearTimeout(t); Geo.stop(); res(Geo.fresh()); };
+        const chk = () => { const b = Geo.fresh(); if (b && onProgress) onProgress(b); if (b && b.acc <= 5) finish(); };
+        Geo.subs.add(chk);
+        const t = setTimeout(finish, timeoutMs || 30000);
+        chk();
       });
     },
   });
-  U.gpsQuality = (f) => (!f ? 'none' : f.acc <= GOOD ? 'good' : f.acc <= 50 ? 'fair' : 'poor');
+  U.gpsQuality = (f) => (!f ? 'none' : f.acc <= target() ? 'good' : f.acc <= 50 ? 'fair' : 'poor');
+  U.gpsTarget = target;
+  U.preciseHelp = () => 'The phone is giving only an approximate location (±1–3 km).\n\nTo get ±5–20 m:\n1. Swipe down › turn on Location.\n2. Phone Settings › Apps › Chrome (and Infra Upgrades, if listed) › Permissions › Location › “Allow only while using” and turn ON “Use precise location”.\n3. Settings › Location › Location services › Google Location Accuracy › ON.\n4. Stand in the open (near a door or window) for 20–30 seconds the first time.';
+  /* GPS warm-up while a school is open */
+  let warm = false;
+  U.gpsWarm = (on) => {
+    if (on && !warm) { warm = true; Geo.start(); }
+    else if (!on && warm) { warm = false; Geo.stop(); }
+  };
 
   /* ---------------- stamp + save ---------------- */
   function fitText(g, text, maxW) {
@@ -184,6 +202,8 @@
     const lastImg = h('img.cam-last', { alt: '' });
     const savingEl = h('span.cam-saving');
     const msg = h('div.cam-msg');
+    const gpsWarnEl = h('button.cam-gpswarn', { type: 'button', onclick: () => U.alert(U.preciseHelp(), 'Turn on precise location') }, '⚠ Location is approximate (±1–3 km). Tap to fix');
+    gpsWarnEl.hidden = true;
     const zoom = h('input.cam-zoom', { type: 'range', min: 1, max: 1, step: 0.1, value: 1, 'aria-label': 'Zoom' });
     const torchBtn = h('button.cam-round', { 'aria-label': 'Torch', onclick: toggleTorch, hidden: true }, U.icon('flash'));
     const flashEl = h('div.cam-flash');
@@ -227,7 +247,7 @@
         h('button.cam-round', { 'aria-label': 'Close camera', onclick: () => close() }, U.icon('x')),
         h('div.cam-top-mid', h('div.cam-title', opts.title || 'Camera'), placeBtn),
         gpsPill),
-      msg,
+      msg, gpsWarnEl,
       h('div.cam-bottom',
         tagsRow,
         h('div.cam-zoomrow', zoom),
@@ -260,7 +280,8 @@
     function refreshGps() {
       const f = Geo.fresh();
       const q = U.gpsQuality(f);
-      gpsPill.textContent = !f ? (Geo.err || 'Finding GPS…') : q === 'poor' ? `GPS weak ±${Math.round(f.acc)} m — wait / go outside` : `GPS ±${Math.round(f.acc)} m`;
+      gpsPill.textContent = !f ? (Geo.err || 'Finding GPS…') : q === 'good' ? `GPS ±${Math.round(f.acc)} m ✓` : `GPS ±${Math.round(f.acc)} m — waiting for ±${U.gpsTarget()} m`;
+      gpsWarnEl.hidden = !Geo.approximate();
       gpsPill.classList.toggle('ok', q === 'good');
       gpsPill.classList.toggle('weak', q === 'fair');
       gpsPill.classList.toggle('poor', q === 'poor');
@@ -408,10 +429,11 @@
       const place = placeText();
       const thisTag = tag;
       busy++; showBusy();
-      const fixP = fixOverride ? Promise.resolve(fixOverride) : Geo.good(2500); // wait a moment for an accurate reading
+      const fixP = fixOverride ? Promise.resolve(fixOverride) : Geo.good(10000); // wait up to 10 s for the accuracy set in Settings
       queue = queue.then(async () => {
         try {
           const fix = await fixP;
+          if (!fixOverride && (!fix || fix.acc > U.gpsTarget())) U.toast(fix ? `GPS was ±${Math.round(fix.acc)} m for this photo (wanted ±${U.gpsTarget()} m). It is marked approximate.` : 'No GPS for this photo — check Location is on.', 4500);
           const r = await U.stampPhoto(blob, U.stampLines(place, fix, ts), { maxSide: st.maxSide, quality: st.quality, size: st.stampSize });
           const meta = await opts.onSave(Object.assign(r, { fix, ts, tag: thisTag, place, source }));
           count++;
@@ -481,7 +503,7 @@
     const files = await U.pickImages({ capture: true });
     let n = 0;
     for (const f of files) {
-      const fix = await Geo.good(4000) || (await Geo.once(8000));
+      const fix = await Geo.good(10000) || (await Geo.once(10000));
       const r = await U.stampPhoto(f, U.stampLines(opts.place(), fix, Date.now()),
         { maxSide: U.S.settings.photo.maxSide, quality: U.S.settings.photo.quality, size: U.S.settings.photo.stampSize });
       await opts.onSave(Object.assign(r, { fix, ts: Date.now(), tag: '', place: opts.place(), source: 'phone' }));

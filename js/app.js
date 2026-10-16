@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const U = self.U, S = U.S, h = U.h;
-  self.CU_VERSION = '1.4.1';
+  self.CU_VERSION = '1.4.2';
   let root = null;
   const scrolls = new Map();
   let curKey = '';
@@ -26,6 +26,7 @@
     if (U.Lock.isLocked()) { curKey = ''; await U.showLock(root); return; }
     const parts = keyNow.replace(/^#\/?/, '').split('/').filter(Boolean);
     curKey = keyNow;
+    U.gpsWarm(parts[0] === 's'); // GPS locks on while a school is open, ready for photos
     try {
       if (!parts.length) await U.screens.home(root);
       else if (parts[0] === 's' && parts[2] === 'room') await U.screens.space(root, parts[1], parts[3]);
@@ -70,6 +71,9 @@
       'More accurate GPS: the app waits a moment for a good reading and shows its accuracy (±m).',
       'Slimmer top bar on phones; tabs scroll away to give more room.'],
     '1.4.1': ['Install help on the first screen: one-tap Install in Chrome, Open in Chrome from WhatsApp / Samsung Internet, iPhone steps.'],
+    '1.4.2': ['Accurate geo-tags: GPS starts as soon as you open a school; photos wait up to 10 s for the accuracy you choose (Settings › Photos: ±5 / ±10 / ±20 m).',
+      'If the phone gives only approximate location (±1–3 km), a red warning shows how to turn on “Use precise location”.',
+      'Good readings are averaged for a steadier position; a photo that could not get the accuracy is marked “approx.” in reports.'],
   };
   function showWhatsNew() {
     let seen = '';
