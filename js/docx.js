@@ -79,7 +79,7 @@
         if (b.total) xml += row(b.total.map((c, i) => cell(cellP(c, { bold: true, color: NAVY, align: b.numeric && i >= 2 ? 'right' : null }), ws[i], { fill: LABEL })).join(''));
         body.push(tbl(xml, ws));
       } else if (b.t === 'photos') {
-        const per = rep.perRow;
+        const per = b.perRow || rep.perRow;
         const cw = CW / per;
         const imgW = cw - 200;
         let xml = '';
@@ -92,7 +92,7 @@
             try {
               const im = await U.reportPhoto(p.id, rep.photoSize);
               if (im) {
-                const boxH = imgW * 0.75;
+                const boxH = per === 1 ? imgW * 1.3 : imgW * 0.75;
                 const s = Math.min(imgW / im.w, boxH / im.h);
                 pic = `<w:p><w:pPr><w:spacing w:after="40"/><w:jc w:val="center"/></w:pPr>${drawing(addMedia(im.bytes, 'jpeg'), Math.round(im.w * s * EMU), Math.round(im.h * s * EMU))}</w:p>`;
               }

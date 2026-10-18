@@ -42,7 +42,7 @@
         add(table(null, rows, { kv: true }));
       } else if (b.t === 'table') add(h('div.pv-scroll', table(b.head, b.total ? [...b.rows, b.total] : b.rows, { numeric: b.numeric, total: !!b.total, cond: b.cond })));
       else if (b.t === 'photos') {
-        const grid = h('div.pv-photos', { style: { gridTemplateColumns: `repeat(${rep.perRow || 2}, 1fr)` } });
+        const grid = h('div.pv-photos', { style: { gridTemplateColumns: `repeat(${b.perRow || rep.perRow || 2}, 1fr)` } });
         for (const p of b.items) {
           const img = U.lazyImg(h('img', { alt: '' }), p.id);
           grid.append(h('figure', h('div.pv-imgbox', img), h('figcaption', h('b', U.photoCaption(p)), h('span', U.photoSub(p)))));

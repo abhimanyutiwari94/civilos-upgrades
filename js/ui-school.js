@@ -197,12 +197,15 @@
     n.value = rec().n || '';
     n.addEventListener('input', () => { save({ n: n.value }); U.autosize(n); });
     setTimeout(() => U.autosize(n), 0);
+    const strip = U.photoStrip(s, photoTarget, placeText, `${it.no ? it.no + ' ' : ''}${it.what}`, () => { if (it.upload) save({ up: U.photosFor(photoTarget).length || null }); onChange && onChange(); });
     const el = h('div.item' + (U.isAnswered(it, rec()) ? '.done' : ''),
       h('div.item-head', h('span.item-no', it.no || '•'), h('div.item-what', it.what),
         it.how ? h('button.icon-btn', { type: 'button', 'aria-label': 'How to check', style: { width: '36px', height: '36px', color: 'var(--saffron-deep)' }, onclick: () => { how.hidden = !how.hidden; } }, U.icon('info')) : null),
       how, chips,
-      h('div.item-row', q, n),
-      U.photoStrip(s, photoTarget, placeText, `${it.no ? it.no + ' ' : ''}${it.what}`, onChange));
+      it.upload ? h('div.item-row.one', n) : h('div.item-row', q, n),
+      it.upload ? h('button.btn.soft.block', { type: 'button', style: { marginTop: '9px' }, onclick: () => U.uploadImages(s, photoTarget, it.what, () => { save({ up: U.photosFor(photoTarget).length || null }); strip.redraw(); onChange && onChange(); }) }, U.icon('upload'), 'Upload images (up to 15 MB each)') : null,
+      strip);
+    if (it.upload) how.hidden = false; // show the guidance for uploads
     return el;
   };
 

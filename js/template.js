@@ -84,6 +84,13 @@
       it('ck_a1', 'A1', 'Can material vehicles reach the school?', 'Note road width, the type of vehicle that can reach, the nearest unloading spot, and a place to store material.'),
       it('ck_a2', 'A2', 'Electricity and water during work', 'Is electricity available (single phase / three phase)? What is the water source? Is a toilet available for workers? Note holidays and exam dates.'),
     ] },
+    /* uploads: rough plan and the school's own demand list (images up to 15 MB each, kept at full quality) */
+    { id: 'ck_b', title: 'B. Rough site plan', items: [
+      Object.assign(it('ck_b1', 'B1', 'Rough site plan of the school', 'Draw a rough plan on paper (buildings, rooms, toilets, gate, playground, water points, trees) and upload a clear photo of it, or upload an existing plan / drawing. Images up to 15 MB each.'), { ans: [], work: [], upload: true }),
+    ] },
+    { id: 'ck_c', title: 'C. Demand list / notes from school management', items: [
+      Object.assign(it('ck_c1', 'C1', 'Demand list / notes from school management', 'Upload photos of the written demand list or notes given by the Head Master / school management (images up to 15 MB each). Write the main points in Notes.'), { ans: [], work: [], upload: true }),
+    ] },
     { id: 'ck_1', title: '1. Terrace waterproofing', items: [
       it('ck_1_1', '1.1', 'Existing waterproofing', 'What type is it and how old? Look for cracks, bubbles, peeling and plants growing.'),
       it('ck_1_2', '1.2', 'Slope and water collection', 'Look for water marks and low spots. The roof should slope towards the drain (about 1 in 100).'),
@@ -461,11 +468,11 @@
     'sd_boys', 'sd_girls', 'sd_totstu', 'sd_teachers', 'sd_buildings', 'sd_floors', 'sd_year', 'sd_rooms', 'sd_bua', 'sd_plot', 'sd_vehicle',
     'cl_records', 'cl_plan', 'cl_notes', 'cv_priority', 'cv_entry', 'cv_remarks', 'cv_overall', 'cv_status'];
 
-  self.CU_TEMPLATE_VERSION = 2;
+  self.CU_TEMPLATE_VERSION = 3;
   self.CU_DEFAULT_TEMPLATE = function () {
     return JSON.parse(JSON.stringify({
       v: 1,
-      tv: 2,
+      tv: 3,
       name: 'School site visit — Civil, MEP and infrastructure',
       conditions: CONDITIONS,
       school: SCHOOL,

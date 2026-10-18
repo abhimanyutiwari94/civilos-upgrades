@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const U = self.U, S = U.S, h = U.h;
-  self.CU_VERSION = '1.4.3';
+  self.CU_VERSION = '1.4.4';
   let root = null;
   const scrolls = new Map();
   let curKey = '';
@@ -76,6 +76,9 @@
       'Good readings are averaged for a steadier position; a photo that could not get the accuracy is marked “approx.” in reports.'],
     '1.4.3': ['Much faster and smoother on every phone: photos save in the background (camera never freezes), photo previews load as you scroll, long pages draw only what is on screen.',
       'Light mode for low-cost phones (automatic, or Settings › Speed): simpler drawing, lighter camera preview, photos kept at 2048 px.'],
+    '1.4.4': ['Checklist › B. Rough site plan: upload plan images (up to 15 MB each, kept at full quality).',
+      'Checklist › C. Demand list / notes from school management: upload photos of their list and write the main points.',
+      'Uploaded plans and lists print large (one per row) in the reports.'],
   };
   function showWhatsNew() {
     let seen = '';

@@ -278,6 +278,44 @@
     } else U.openCamera(opts);
   };
 
+  /* Upload images (site plan, school's demand list …): kept at full quality, up to 15 MB each.
+     Only a small preview is decoded here, so even very large images do not freeze the phone. */
+  U.MAX_UPLOAD = 15 * 1024 * 1024;
+  U.uploadImages = async (school, target, caption, onDone) => {
+    const files = await U.pickImages({ multiple: true });
+    if (!files.length) return;
+    const busy = U.busy('Adding images…');
+    let n = 0;
+    const skipped = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      busy.set(`Adding image ${i + 1} of ${files.length}`, i / files.length);
+      if (f.size > U.MAX_UPLOAD) { skipped.push(`${f.name} (${U.fmtBytes(f.size)} — more than 15 MB)`); continue; }
+      try {
+        let bm;
+        try { bm = await createImageBitmap(f, { imageOrientation: 'from-image', resizeWidth: 360, resizeQuality: 'medium' }); } catch (e) { bm = await U.decodeImage(f); }
+        const c = document.createElement('canvas');
+        const k = Math.min(1, 360 / Math.max(bm.width, bm.height));
+        c.width = Math.max(1, Math.round(bm.width * k)); c.height = Math.max(1, Math.round(bm.height * k));
+        const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(bm, 0, 0, c.width, c.height);
+        const ratio = bm.width / bm.height;
+        if (bm.close) bm.close();
+        const thumb = await U.canvasToBlob(c, 'image/jpeg', 0.75);
+        c.width = c.height = 0;
+        const blob = f.type && /^image\//.test(f.type) ? f : new Blob([f], { type: 'image/jpeg' });
+        const name = String(f.name || 'image').replace(/\.[^.]+$/, '');
+        const meta = await U.addPhoto(school, target, { blob, thumb, w: null, h: null, fix: null, ts: f.lastModified || Date.now(), source: 'upload', place: '' }, caption ? `${caption} — ${name}` : name);
+        await U.DB.updatePhotoMeta(meta.id, { ratio, approx: false });
+        meta.ratio = ratio; meta.approx = false;
+        n++;
+      } catch (e) { skipped.push(`${f.name} (could not be read)`); }
+    }
+    busy.done();
+    if (skipped.length) U.alert(`${n} image${n === 1 ? '' : 's'} added.\n\nNot added:\n• ${skipped.join('\n• ')}`, 'Upload');
+    else U.toast(`${n} image${n === 1 ? '' : 's'} added`);
+    onDone && onDone();
+  };
+
   /* Remove photos: they go to "Recently deleted" (school menu) and can be brought back. */
   U.removePhotos = async (ids) => {
     const at = Date.now();

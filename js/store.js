@@ -72,7 +72,8 @@
     if (S.settings.brand.reportTitle === 'School Infrastructure Survey Report') S.settings.brand.reportTitle = 'School Site Visit Report';
     if (!S.settings.brand.projectName) S.settings.brand.projectName = 'CSR School Renovation';
     S.template = (await U.DB.kvGet('template')) || self.CU_DEFAULT_TEMPLATE();
-    if (U.migrateTemplate(S.template)) await U.saveTemplate();
+    /* bringing the saved form up to date must never stop the app from opening */
+    try { if (U.migrateTemplate(S.template)) await U.saveTemplate(); } catch (e) { console.error('form update skipped', e); }
     await U.refreshSchools();
   };
   U.saveSettings = async () => { await U.DB.kvSet('settings', S.settings); };
@@ -262,7 +263,7 @@
   U.liveSpaces = (s) => (s.spaces || []).filter((x) => !x.deleted);
 
   /* Progress = points answered, out of all points (points with no answer buttons count when Count/Size or Notes is filled). */
-  const answered = (it, r) => !!(r && (r.c || ((it.ans && !it.ans.length) && (r.q || r.n))));
+  const answered = (it, r) => !!(r && (r.c || ((it.ans && !it.ans.length) && (r.q || r.n || r.up))));
   U.progress = (s) => {
     const items = U.T.allChecks();
     let done = items.filter((i) => answered(i, s.checks[i.id])).length;
@@ -301,7 +302,7 @@
       const defItems = new Map(D.checklist.concat(D.roomChecklist).flatMap((x) => x.items).map((i) => [i.id, i]));
       for (const it of T.checklist.concat(T.roomChecklist).flatMap((x) => x.items)) {
         const d = defItems.get(it.id);
-        if (d && d.ans && it.ans === undefined) { it.ans = d.ans.slice(); it.work = d.work.slice(); }
+        if (d && d.ans && it.ans === undefined) { it.ans = d.ans.slice(); it.work = (d.work || []).slice(); if (d.upload) it.upload = true; }
       }
       const defF = new Map(D.spaceFields.flatMap((x) => x.fields).map((x) => [x.id, x]));
       for (const fl of T.spaceFields.flatMap((x) => x.fields)) { const d = defF.get(fl.id); if (d && d.groups && fl.groups === undefined) fl.groups = d.groups.slice(); }
@@ -326,6 +327,19 @@
       if (!T.toiletChecklist) T.toiletChecklist = D.toiletChecklist;
       if (!T.qtyCatalog) T.qtyCatalog = D.qtyCatalog;
       T.tv = 2;
+      ch = true;
+    }
+    if ((T.tv || 1) < 3) {
+      const removed = new Set((T.removed || []).map((r) => (r.kind === 'section' ? r.section.id : r.entry && r.entry.id)));
+      const have = new Set(T.checklist.map((x) => x.id));
+      let at = T.checklist.findIndex((x) => x.id === 'ck_a');
+      at = at < 0 ? 0 : at + 1;
+      for (const id of ['ck_b', 'ck_c']) {
+        if (have.has(id) || removed.has(id)) continue;
+        T.checklist.splice(at, 0, D.checklist.find((x) => x.id === id));
+        at++;
+      }
+      T.tv = 3;
       ch = true;
     }
     return ch;

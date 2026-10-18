@@ -85,7 +85,7 @@
     return '';
   };
   U.photoCaption = (p, s) => [U.photoNo(p), p.caption || U.targetLabel(s, p.target), p.tag || ''].filter(Boolean).join(' · ');
-  U.photoSub = (p) => [p.lat != null ? U.fmtLatLng(p.lat, p.lng) + (p.acc != null ? ` (${p.approx ? 'approx. ' : ''}±${Math.round(p.acc)} m)` : '') : 'No GPS', U.fmtDateTime(p.ts)].join('  ·  ');
+  U.photoSub = (p) => (p.source === 'upload' ? 'Uploaded image  ·  ' + U.fmtDateTime(p.ts) : null) || [p.lat != null ? U.fmtLatLng(p.lat, p.lng) + (p.acc != null ? ` (${p.approx ? 'approx. ' : ''}±${Math.round(p.acc)} m)` : '') : 'No GPS', U.fmtDateTime(p.ts)].join('  ·  ');
 
   /* ---------- build the report as simple blocks ---------- */
   U.buildReport = (school, photos, o) => {
@@ -205,7 +205,11 @@
       if (!rows.length) continue;
       blocks.push({ t: 'h2', text: sec.title });
       blocks.push(checkTable(rows, o.includeHow));
-      if (o.photos && secPhotos.length) blocks.push({ t: 'photos', items: secPhotos });
+      if (o.photos && secPhotos.length) {
+        const up = secPhotos.filter((x) => x.source === 'upload'), cam = secPhotos.filter((x) => x.source !== 'upload');
+        if (up.length) blocks.push({ t: 'photos', items: up, perRow: 1 }); // plans and lists print one per row, large
+        if (cam.length) blocks.push({ t: 'photos', items: cam });
+      }
     }
 
     /* each room / space */
@@ -273,6 +277,23 @@
   U.reportPhoto = async (id, maxSide) => {
     const p = await U.DB.photo(id);
     if (!p || !p.blob) return null;
+    if (p.source === 'upload' && self.createImageBitmap) {
+      /* plans and lists print large and sharp; decoded straight at print size (large files never load in full) */
+      const size = Math.max(maxSide || 1400, 2200);
+      try {
+        const land = (p.ratio || 1) >= 1;
+        const bm = await createImageBitmap(p.blob, Object.assign({ imageOrientation: 'from-image', resizeQuality: 'high' }, land ? { resizeWidth: size } : { resizeHeight: size }));
+        const c = document.createElement('canvas');
+        const k = Math.min(1, size / Math.max(bm.width, bm.height));
+        c.width = Math.round(bm.width * k); c.height = Math.round(bm.height * k);
+        const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(bm, 0, 0, c.width, c.height);
+        if (bm.close) bm.close();
+        const b = await U.canvasToBlob(c, 'image/jpeg', 0.86);
+        const out = { bytes: new Uint8Array(await b.arrayBuffer()), w: c.width, h: c.height, p };
+        c.width = c.height = 0;
+        return out;
+      } catch (e) { /* fall back below */ }
+    }
     const r = await U.resizeBlob(p.blob, maxSide || 1400, 0.82, 'image/jpeg');
     return { bytes: new Uint8Array(await r.blob.arrayBuffer()), w: r.w, h: r.h, p };
   };

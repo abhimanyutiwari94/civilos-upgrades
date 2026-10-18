@@ -430,3 +430,4 @@ body.lite .top { background: var(--saffron); }
 body.lite *, body.lite *::before, body.lite *::after { transition: none !important; animation-duration: 0.01ms !important; }
 body.lite .bar i { background: var(--saffron); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation-duration: 0.01ms !important; } }
+.item-row.one { grid-template-columns: 1fr; }

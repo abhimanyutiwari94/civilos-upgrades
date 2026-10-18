@@ -209,10 +209,10 @@
 
     let photoDone = 0;
     const photoTotal = rep.blocks.filter((b) => b.t === 'photos').reduce((a, b) => a + b.items.length, 0) || 1;
-    async function photos(items) {
-      const per = rep.perRow, gap = 10;
+    async function photos(items, perRow) {
+      const per = perRow || rep.perRow, gap = 10;
       const cw = (CW - gap * (per - 1)) / per;
-      const boxH = cw * 0.75;
+      const boxH = per === 1 ? Math.min(cw * 1.3, PH - TOP - BOT - 60) : cw * 0.75; // uploads (one per row) get a tall frame
       for (let i = 0; i < items.length; i += per) {
         const row = items.slice(i, i + per);
         const caps = row.map((p) => wrap(U.photoCaption(p), 7.6, true, cw).slice(0, 3));
@@ -288,7 +288,7 @@
       } else if (b.t === 'table') {
         await table(b.head, b.widths, b.rows, { total: b.total, numeric: b.numeric, cond: b.cond });
       } else if (b.t === 'photos') {
-        await photos(b.items);
+        await photos(b.items, b.perRow);
       } else if (b.t === 'pb') {
         if (y > TOP + 1) newPage();
       } else if (b.t === 'sign') {
